@@ -4,12 +4,26 @@ kind: Namespace
 metadata:
   labels:
     kubernetes.io/metadata.name: auth
+    internal-ca/inject: "true"
   name: auth
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: lldap-storage
+  namespace: auth
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authelia-storage
   namespace: auth
 spec:
   accessModes:
@@ -30,6 +44,21 @@ spec:
     initdb:
       database: lldap
       owner: lldap-db-user
+  storage:
+    storageClass: longhorn-single-local
+    size: 2Gi
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: authelia-db-cluster
+  namespace: auth
+spec:
+  instances: 2
+  bootstrap:
+    initdb:
+      database: authelia
+      owner: authelia-db-user
   storage:
     storageClass: longhorn-single-local
     size: 2Gi
@@ -55,6 +84,27 @@ spec:
       metadata:
         note: "LLDAP PostgreSQL DB uri, with user and password."
 ---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: pushsecret-authelia-db
+  namespace: auth
+spec:
+  refreshInterval: 48h
+  secretStoreRefs:
+    - name: bitwarden-secrets-manager
+      kind: ClusterSecretStore
+  selector:
+    secret:
+      name: authelia-db-cluster-app
+  data:
+    - match:
+        secretKey: uri
+        remoteRef:
+          remoteKey: authelia-db-cluster-app/uri
+      metadata:
+        note: "Authelia PostgreSQL DB uri, with user and password."
+---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -63,6 +113,15 @@ metadata:
 spec:
   interval: 24h
   url: https://djjudas21.github.io/charts
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: authelia
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://charts.authelia.com
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -106,6 +165,21 @@ spec:
   - secretKey: smtp-password
     remoteRef:
       key: "lldap-secrets/smtp-password"
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: authelia-secrets
+  namespace: auth
+spec:
+  refreshInterval: 24h
+  secretStoreRef:
+    name: bitwarden-secrets-manager
+    kind: ClusterSecretStore
+  data:
+  - secretKey: ldap-bind-user-rw-pass
+    remoteRef:
+      key: "authelia/ldap-bind-user-rw-pass"
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -187,6 +261,218 @@ spec:
       enabled: true
       fromSecret: lldap-db-cluster-app
       uriKey: uri
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: authelia
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: auth
+  chart:
+    spec:
+      chart: authelia
+      version: 0.10.42
+      sourceRef:
+        kind: HelmRepository
+        name: authelia
+        namespace: flux-system
+      interval: 24h
+  values:
+    image:
+      registry: 'ghcr.io'
+      repository: 'authelia/authelia'
+      tag: '4.39.6'
+    rbac:
+      enabled: true
+      serviceAccountName: 'authelia'
+    service:
+      type: 'ClusterIP'
+      port: 80
+    ingress:
+      enabled: false
+    pod:
+      kind: 'Deployment'
+      replicas: 1
+      extraVolumeMounts: []
+      extraVolumes: []
+    configMap:
+      disabled: false
+      server:
+        port: 9091
+        endpoints:
+          automatic_authz_implementations: []
+          authz: {}
+      log:
+        level: 'info'
+        format: 'text'
+      telemetry:
+        metrics:
+          enabled: false
+      default_2fa_method: 'totp'
+      theme: 'dark'
+      definitions:
+        network: {}
+        user_attributes: {}
+      identity_validation:
+        reset_password:
+          jwt_lifespan: '5 minutes'
+          jwt_algorithm: 'HS256'
+        elevated_session:
+          code_lifespan: '5 minutes'
+          elevation_lifespan: '10 minutes'
+          characters: 8
+          require_second_factor: true
+          skip_second_factor: false
+      totp:
+        disable: false
+        issuer: 'auth.imnotaserver.xyz'
+        skew: 0
+        digits: 6
+        period: 30
+        allowed_algorithms:
+          - 'SHA1'
+        allowed_digits:
+          - 6
+        allowed_periods:
+          - 30
+      webauthn:
+        disable: true
+      duo_api:
+        enabled: false
+      authentication_backend:
+        password_reset:
+          disable: false
+        password_change:
+          disable: false
+        refresh_interval: '5 minutes'
+        ldap:
+          enabled: true
+          implementation: 'lldap'
+          address: 'ldap://auth-lldap-ldap:3890'
+          timeout: '5 seconds'
+          start_tls: false
+          tls:
+            server_name: ''
+            skip_verify: false
+            minimum_version: 'TLS1.2'
+            maximum_version: 'TLS1.3'
+          base_dn: 'DC=imnotaserver,DC=xyz'
+          additional_users_dn: ''
+          users_filter: ''
+          additional_groups_dn: ''
+          groups_filter: ''
+          permit_referrals: false
+          permit_unauthenticated_bind: false
+          permit_feature_detection_failure: false
+          user: 'UID=bind_user_rw,OU=people,DC=imnotaserver,DC=xyz'
+          password:
+            disabled: false
+            secret_name: ~
+            value: ''
+            path: 'authentication.ldap.password.txt'
+          attributes:
+            distinguished_name: ''
+            username: ''
+            display_name: ''
+            family_name: ''
+            given_name: ''
+            middle_name: ''
+            nickname: ''
+            gender: ''
+            birthdate: ''
+            website: ''
+            profile: ''
+            picture: ''
+            zoneinfo: ''
+            locale: ''
+            phone_number: ''
+            phone_extension: ''
+            street_address: ''
+            locality: ''
+            region: ''
+            postal_code: ''
+            country: ''
+            mail: ''
+            member_of: ''
+            group_name: ''
+            extra: {}
+        file:
+          enabled: false
+      password_policy:
+        standard:
+          enabled: true
+          min_length: 12
+          max_length: 0
+          require_uppercase: false
+          require_lowercase: false
+          require_number: true
+          require_special: true
+      access_control:
+        secret:
+          enabled: false
+        default_policy: 'deny'
+        rules: []
+      session:
+        name: 'authelia_session'
+        same_site: 'lax'
+        expiration: '1 hour'
+        inactivity: '5 minutes'
+        remember_me: '1 month'
+        encryption_key:
+          disabled: false
+        cookies: []
+        redis:
+          enabled: false
+          deploy: false
+      regulation:
+        modes:
+          - 'user'
+        max_retries: 3
+        find_time: '2 minutes'
+        ban_time: '5 minutes'
+      storage:
+        postgres:
+          enabled: true
+          deploy: false
+      notifier:
+        disable_startup_check: false
+        filesystem:
+          enabled: false
+        smtp:
+          enabled: false
+          address: 'submission://smtp.mail.svc.cluster.local:587'
+          timeout: '20 seconds'
+          sender: 'Authelia <admin@example.com>'
+          identifier: 'localhost'
+          subject: '[Authelia] {title}'
+          startup_check_address: 'test@authelia.com'
+          disable_html_emails: false
+          disable_require_tls: false
+          disable_starttls: false
+          username: ''
+          password:
+            disabled: false
+            secret_name: ~
+            value: ''
+            path: 'notifier.smtp.password.txt'
+      identity_providers:
+        oidc:
+          enabled: false
+          hmac_secret:
+            disabled: false
+          lifespans:
+            access_token: '1 hour'
+            refresh_token: '1 hour and 30 minutes'
+            id_token: '1 hour'
+            authorize_code: '1 minute'
+            device_code: '10 minutes'
+          clients: []
+    secret:
+      disabled: false
+    certificates:
+      existingSecret: ''
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

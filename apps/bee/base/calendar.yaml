@@ -1,0 +1,291 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: calendar
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: davis-storage
+  namespace: calendar
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: davis-db-cluster
+  namespace: calendar
+spec:
+  instances: 2
+  bootstrap:
+    initdb:
+      database: davis
+      owner: davis-db-user
+  storage:
+    storageClass: longhorn-single-local
+    size: 1Gi
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: pushsecret-davis-db
+  namespace: calendar
+spec:
+  refreshInterval: 48h
+  secretStoreRefs:
+    - name: bitwarden-secrets-manager
+      kind: ClusterSecretStore
+  selector:
+    secret:
+      name: davis-db-cluster-app
+  data:
+    - match:
+        secretKey: uri
+        remoteRef:
+          remoteKey: davis-db-cluster-app/uri
+      metadata:
+        note: "Davis PostgreSQL DB uri, with user and password."
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: davis-secrets
+  namespace: calendar
+spec:
+  refreshInterval: 24h
+  secretStoreRef:
+    name: bitwarden-secrets-manager
+    kind: ClusterSecretStore
+  data:
+  - secretKey: admin-pass
+    remoteRef:
+      key: "vaultwarden-secrets/admin-pass"
+  - secretKey: smtp-user
+    remoteRef:
+      key: "vaultwarden-secrets/smtp-user"
+  - secretKey: smtp-pass
+    remoteRef:
+      key: "vaultwarden-secrets/smtp-pass"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: davis-config
+  namespace: calendar
+data:
+  public-calendars: 'true'
+  smtp-user: mrtn.tome@gmail.com
+  smtp-host: smtp-relay.brevo.com
+  port-port: '587'
+  admin-user: admin
+  auth-method: LDAP
+  ldap-url: ldap://127.0.0.1:3890
+  ldap-dn-pattern: uid=%u,ou=people,dc=imnotaserver,dc=xyz
+  ldap-mail-attribute: mail
+  ldap-user-autocreate: 'true'
+  timezone: 'America/Argentina/Buenos_Aires'
+  smtp-from: admin@caldav.imnotaserver.xyz
+  nginx-conf: |
+    server {
+      listen 80;
+      access_log off;
+
+      root /var/www/davis/public/;
+      index index.php;
+
+      rewrite ^/.well-known/caldav /dav/ redirect;
+      rewrite ^/.well-known/carddav /dav/ redirect;
+
+      charset utf-8;
+
+      location ~ /(\.ht) {
+          deny all;
+          return 404;
+      }
+
+      location / {
+          try_files $uri $uri/ /index.php$is_args$args;
+      }
+
+      location ~ ^(.+\.php)(.*)$ {
+          try_files       $fastcgi_script_name =404;
+          include         fastcgi_params;
+          fastcgi_pass    127.0.0.1:9000;
+          fastcgi_param   SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+          fastcgi_param   PATH_INFO        $fastcgi_path_info;
+          fastcgi_split_path_info  ^(.+\.php)(.*)$;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: davis
+  namespace: calendar
+spec:
+  replicas: 1
+  minReadySeconds: 10
+  selector:
+    matchLabels:
+      app: davis
+  template:
+    metadata:
+      labels:
+        app: davis
+    spec:
+      initContainers:
+        - name: init-davis
+          image: ghcr.io/tchapi/davis:4.4.2
+          securityContext:
+            runAsUser: 0
+          command: ["/bin/sh", "-c"]
+          args:
+            - 'cp -a /var/www/davis/. /tmp-data;
+              chown -R 82:82 /tmp-data;
+              echo done!'
+          volumeMounts:
+            - name: davis-data
+              mountPath: /tmp-data
+      containers:
+        - name: nginx
+          image: nginx:1.29.0-alpine-slim
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: davis-data
+              mountPath: /var/www/davis
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx-conf
+        - name: davis
+          image: ghcr.io/tchapi/davis:5.1.2
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "bin/console doctrine:migrations:migrate --no-interaction"]
+          ports:
+            - name: fpm
+              containerPort: 9000
+          env:
+            - name: PUBLIC_CALENDARS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: davis-config
+                  key: public-calendars
+            - name: ADMIN_LOGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: admin-user
+            - name: AUTH_METHOD
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: auth-method
+            - name: CALDAV_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: caldav-enabled
+            - name: CARDDAV_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: carddav-enabled
+            - name: WEBDAV_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: webdav-enabled
+            - name: APP_TIMEZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: app-timezone
+            - name: MAIL_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: smtp-user
+            - name: MAIL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: smtp-host
+            - name: MAIL_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: smtp-port
+            - name: WEBDAV_TMP_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: webdav-tmp-dir
+            - name: WEBDAV_PUBLIC_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: webdav_public_dir
+            - name: INVITE_FROM_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: davis
+                  key: invite_from_address
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: davis-db-cluster-app
+                  key: uri
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: davis-secrets
+                  key: admin-pass
+            - name: MAIL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: davis-secrets
+                  key: smtp-pass
+            - name: APP_ENV
+              value: prod
+            - name: DATABASE_DRIVER
+              value: postgresql
+            - name: AUTH_REALM
+              value: SabreDAV
+            - name: MAILER_DSN
+              value: smtp://$(MAIL_USERNAME):$(MAIL_PASSWORD)@$(MAIL_HOST):$(MAIL_PORT)
+          volumeMounts:
+            - name: davis-data
+              mountPath: /var/www/davis
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: davis-config
+        - name: davis-data
+          persistentVolumeClaim:
+            claimName: davis-storage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: davis-http
+  labels:
+    app: davis
+spec:
+  type: ClusterIP
+  selector:
+    app: davis
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 80

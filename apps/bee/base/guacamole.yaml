@@ -1,0 +1,119 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: guacamole
+  name: guacamole
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: guacamole-db-cluster
+  namespace: guacamole
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: guacamole
+      owner: guacamole-db-user
+  storage:
+    storageClass: longhorn-single-local
+    size: 2Gi
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: guacamole
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://dmunozv04.github.io/charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: guacamole
+  namespace: flux-system
+spec:
+  interval: 1h
+  targetNamespace: guacamole
+  chart:
+    spec:
+      chart: guacamole
+      version: 0.1.8
+      sourceRef:
+        kind: HelmRepository
+        name: guacamole
+        namespace: flux-system
+      interval: 1h
+  values:
+    client:
+      replicaCount: 1
+      image:
+        repository: guacamole/guacamole
+        pullPolicy: IfNotPresent
+        tag: "1.6.0"
+      service:
+        type: ClusterIP
+        port: 8080
+      livenessProbe:
+        httpGet:
+          path: /guacamole/api/languages
+          port: http
+        initialDelaySeconds: 60
+        periodSeconds: 30
+      readinessProbe:
+        httpGet:
+          path: /guacamole/api/languages
+          port: http
+        initialDelaySeconds: 30
+        periodSeconds: 10
+      auth:
+
+      extraEnv: 
+        - WEBAPP_CONTEXT: ROOT 
+      i18n:
+        allowedLanguages: "en,es"
+      proxy:
+        enabled: false
+    guacd:
+      replicaCount: 1
+      image:
+        repository: guacamole/guacd
+        pullPolicy: IfNotPresent
+        tag: "1.6.0"
+      service:
+        type: ClusterIP
+        port: 4822
+      livenessProbe:
+        tcpSocket:
+          port: 4822
+        initialDelaySeconds: 30
+        periodSeconds: 30
+      readinessProbe:
+        tcpSocket:
+          port: 4822
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      extraEnv: []
+    serviceAccount:
+      create: true
+      automount: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: guacamole-ui
+  namespace: guacamole
+spec:
+  parentRefs:
+  - name: metal-gateway
+    namespace: gateways
+    sectionName: imnotaserver.xyz-https
+  hostnames:
+  - "guacamole.imnotaserver.xyz"
+  rules:
+  - backendRefs:
+    - name: guacamole-guacamole-client
+      port: 8080
