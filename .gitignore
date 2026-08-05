@@ -1,0 +1,34 @@
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Kubernetes / local tooling
+kubeconfig
+kubeconfig.yaml
+*.kubeconfig
+.kube/
+
+# Secrets / key material that should never be committed
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.agekey
+sops.decrypted.*
+.env
+.env.*
+
+# Kustomize / flux local build output
+build/
+*.local.yaml
