@@ -1,0 +1,32 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: metrics-server
+  namespace: flux-system
+spec:
+  interval: 24h
+  ref:
+    tag: v0.9.0
+  url: https://github.com/kubernetes-sigs/metrics-server
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: metrics-server
+  namespace: flux-system
+spec:
+  interval: 24h
+  path: ./manifests/overlays/release
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: metrics-server
+  patches:
+    - patch: |-
+        - op: add
+          path: /spec/template/spec/containers/0/args/0
+          value: --kubelet-insecure-tls
+      target:
+        kind: Deployment
+        name: metrics-server
