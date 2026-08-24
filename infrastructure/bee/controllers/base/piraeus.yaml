@@ -60,4 +60,29 @@ spec:
     kind: OCIRepository
     name: linstor-cluster
     namespace: flux-system
-  values: {}
+  values:
+    linstorCluster:
+      csiNode:
+        enabled: true
+        podTemplate:
+          spec:
+            containers:
+              - name: linstor-csi
+                volumeMounts:
+                - mountPath: /var/lib/k0s/kubelet
+                  name: publish-dir
+                  mountPropagation: Bidirectional
+              - name: csi-node-driver-registrar
+                env:
+                  - name: KUBELET_REGISTRATION_PATH
+                    value: /var/lib/k0s/kubelet/plugins/linstor.csi.linbit.com/csi.sock
+            volumes:
+            - name: publish-dir
+              hostPath:
+                path: /var/lib/k0s/kubelet
+            - name: registration-dir
+              hostPath:
+                path: /var/lib/k0s/kubelet/plugins_registry
+            - name: plugin-dir
+              hostPath:
+                  path: /var/lib/k0s/kubelet/plugins/linstor.csi.linbit.com
