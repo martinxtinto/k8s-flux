@@ -1,0 +1,48 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: local-path-provisioner
+  namespace: flux-system
+spec:
+  interval: 24h
+  ref:
+    tag: v0.0.32
+  url: https://github.com/rancher/local-path-provisioner
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: local-path-provisioner
+  namespace: flux-system
+spec:
+  interval: 24h
+  path: ./deploy
+  prune: false
+  sourceRef:
+    kind: GitRepository
+    name: local-path-provisioner
+  patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: local-path-config
+        namespace: local-path-storage
+      data:
+        config.json: |-
+          {
+                  "nodePathMap":[
+                  {
+                          "node":"DEFAULT_PATH_FOR_NON_LISTED_NODES",
+                          "paths":["/var/lib/k0s/local-storage"]
+                  }
+                  ]
+          }
+  - patch: |-
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: local-path-storage
+        labels:
+          pod-security.kubernetes.io/enforce: privileged
