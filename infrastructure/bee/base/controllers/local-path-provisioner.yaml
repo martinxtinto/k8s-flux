@@ -39,10 +39,3 @@ spec:
                   }
                   ]
           }
-  - patch: |-
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: local-path-storage
-        labels:
-          pod-security.kubernetes.io/enforce: privileged
