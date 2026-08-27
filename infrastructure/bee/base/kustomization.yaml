@@ -5,3 +5,5 @@ resources:
 - ./metrics-server.yaml
 - ./piraeus.yaml
 - ./local-path-provisioner.yaml
+- ./cert-manager.yaml
+- ./external-secrets.yaml

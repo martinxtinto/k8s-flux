@@ -1,0 +1,135 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: jetstack
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://charts.jetstack.io
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cert-manager
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: cert-manager
+  chart:
+    spec:
+      chart: cert-manager
+      version: 1.21.1
+      sourceRef:
+        kind: HelmRepository
+        name: jetstack
+        namespace: flux-system
+      interval: 24h
+  install:
+    createNamespace: true
+  values:
+    crds:
+      enabled: true
+      keep: false
+    prometheus:
+      enabled: false
+    config:
+      apiVersion: controller.config.cert-manager.io/v1alpha1
+      kind: ControllerConfiguration
+      enableGatewayAPI: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: trust-manager
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: cert-manager
+  chart:
+    spec:
+      chart: trust-manager
+      version: 0.24.0
+      sourceRef:
+        kind: HelmRepository
+        name: jetstack
+        namespace: flux-system
+      interval: 24h
+  install:
+    createNamespace: true
+  values:
+    crds:
+      enabled: true
+      keep: false
+    secretTargets:
+      enabled: true
+      authorizedSecrets:
+        - tls-trusted-bundle
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: bitwarden-bootstrap-issuer
+  namespace: external-secrets
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bitwarden-bootstrap-certificate
+  namespace: external-secrets
+spec:
+  commonName: cert-manager-bitwarden-tls
+  isCA: true
+  secretName: bitwarden-ca-certs
+  subject:
+    organizations:
+      - external-secrets.io
+  dnsNames:
+    - external-secrets-bitwarden-sdk-server.external-secrets.svc.cluster.local
+    - bitwarden-sdk-server.external-secrets.svc.cluster.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+    - ::1
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS8
+    size: 2048
+  issuerRef:
+    name: bitwarden-bootstrap-issuer
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: bitwarden-certificate-issuer
+  namespace: external-secrets
+spec:
+  ca:
+    secretName: bitwarden-ca-certs
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bitwarden-tls-certs
+  namespace: external-secrets
+spec:
+  secretName: bitwarden-tls-certs
+  dnsNames:
+    - external-secrets-bitwarden-sdk-server.external-secrets.svc.cluster.local
+    - bitwarden-sdk-server.external-secrets.svc.cluster.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+    - ::1
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS8
+    size: 2048
+  issuerRef:
+    name: bitwarden-certificate-issuer
+    kind: Issuer
+    group: cert-manager.io
