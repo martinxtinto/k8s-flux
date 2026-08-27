@@ -29,5 +29,3 @@ spec:
   path: ./infrastructure/bee/development/configurations
   prune: false
   wait: true
-  dependsOn:
-    - name: infrastructure-controllers
