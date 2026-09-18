@@ -44,6 +44,8 @@ metadata:
   name: trust-manager
   namespace: flux-system
 spec:
+  dependsOn:
+    - name: cert-manager
   interval: 24h
   targetNamespace: cert-manager
   chart:
