@@ -40,7 +40,7 @@ gateway-api-crds ─┬─> cert-manager ─┬─> external-secrets ──> ext
                   │                 └───────────────────────────────────────────────────────────────────────────────────────────────────┴─> cert-manager-issuers ─┐
                   └─> nginx-gateway-fabric ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┴─> gateways ─┐
 piraeus-operator ──> linstor-cluster ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-                                                                                                                                                                              └─> apps
+                                                                                                                                                                              └─> apps (one Kustomization each, e.g. test)
 ```
 
 `external-secrets-certs` also depends on `cert-manager` directly (it needs the Issuer and
@@ -52,6 +52,11 @@ Every service is exposed through it on a subdomain. There is no LoadBalancer con
 nginx-gateway-fabric runs its data plane as a DaemonSet with `hostPort` 80/443 on every node, so
 the kube-vip API VIP answers on 80/443 (gateway) as well as 6443 (API), whichever node holds it. `gateway-api-crds` is defined directly in `infrastructure.yaml`
 because its source is the upstream Gateway API repository.
+
+Each app lives in `apps/<cluster>/<app>/base` with its own Kustomization in `apps.yaml`, whose
+`dependsOn` lists only what that app uses (`gateways` for anything with an HTTPRoute, plus
+`linstor-cluster` for PVCs, `external-secrets-store` for ExternalSecrets). `apps/bee/test` is a
+`whoami` deployment served at `test.xtinto.com`, used to smoke-test the gateway and TLS.
 
 To add a unit: create `infrastructure/<cluster>/<unit>/base/`, then add a Kustomization
 for it in each environment's `infrastructure.yaml` with `dependsOn` on whatever it needs
