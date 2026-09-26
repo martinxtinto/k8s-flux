@@ -4,6 +4,23 @@ kind: Namespace
 metadata:
   name: gateways
 ---
+apiVersion: gateway.nginx.org/v1alpha2
+kind: NginxProxy
+metadata:
+  name: lan-proxy
+  namespace: gateways
+spec:
+  kubernetes:
+    daemonSet: {}
+    service:
+      type: ClusterIP
+      patches:
+      - type: StrategicMerge
+        value:
+          spec:
+            externalIPs:
+            - 192.168.10.10
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -13,6 +30,11 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt
 spec:
   gatewayClassName: nginx
+  infrastructure:
+    parametersRef:
+      group: gateway.nginx.org
+      kind: NginxProxy
+      name: lan-proxy
   listeners:
   - name: xtinto.com-http
     hostname: "*.xtinto.com"
