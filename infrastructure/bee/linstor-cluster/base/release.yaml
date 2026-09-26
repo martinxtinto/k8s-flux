@@ -51,3 +51,28 @@ spec:
             - name: plugin-dir
               hostPath:
                   path: /var/lib/k0s/kubelet/plugins/linstor.csi.linbit.com
+    # Retain everywhere: deleting a PVC never destroys data. Released PVs (and their LINSTOR
+    # resources) have to be removed by hand. autoPlace is the number of copies.
+    storageClasses:
+      # single copy, on the node where the pod is first scheduled
+      - name: local
+        annotations:
+          storageclass.kubernetes.io/is-default-class: "true"
+        reclaimPolicy: Retain
+        allowVolumeExpansion: true
+        volumeBindingMode: WaitForFirstConsumer
+        provisioner: linstor.csi.linbit.com
+        parameters:
+          linstor.csi.linbit.com/autoPlace: "1"
+          linstor.csi.linbit.com/storagePool: pool-0
+          linstor.csi.linbit.com/allowRemoteVolumeAccess: "false"
+      # two copies, one per node
+      - name: replicated
+        reclaimPolicy: Retain
+        allowVolumeExpansion: true
+        volumeBindingMode: WaitForFirstConsumer
+        provisioner: linstor.csi.linbit.com
+        parameters:
+          linstor.csi.linbit.com/autoPlace: "2"
+          linstor.csi.linbit.com/storagePool: pool-0
+          linstor.csi.linbit.com/allowRemoteVolumeAccess: "false"

@@ -13,13 +13,3 @@ spec:
             source:
               hostDevices:
                 - /dev/disk/by-path/pci-0000:00:17.0-ata-2
-    storageClasses:
-      - name: replicated
-        reclaimPolicy: Delete
-        allowVolumeExpansion: true
-        volumeBindingMode: WaitForFirstConsumer
-        provisioner: linstor.csi.linbit.com
-        parameters:
-          linstor.csi.linbit.com/autoPlace: "1"
-          linstor.csi.linbit.com/storagePool: pool-0
-          linstor.csi.linbit.com/allowRemoteVolumeAccess: "false"
