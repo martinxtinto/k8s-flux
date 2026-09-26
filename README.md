@@ -36,17 +36,21 @@ otherwise both environments point their Kustomization at `base/`.
 `bee` infrastructure units, and what each waits for:
 
 ```
-gateway-api-crds ─┬─> cert-manager ─┬─> external-secrets ──> external-secrets-certs ──> bitwarden-sdk-server ──> external-secrets-store ─┬─> cert-manager-issuers ─┐
-                  │                 └────────────────────────────────────────────────────────────────────────────────────────────────────┘                         │
-                  └─> nginx-gateway-fabric ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-piraeus-operator ──> linstor-cluster ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-                                                                                                                                                                    └─> apps
+gateway-api-crds ─┬─> cert-manager ─┬─> external-secrets ──> external-secrets-certs ──> bitwarden-sdk-server ──> external-secrets-store ─┐
+                  │                 └───────────────────────────────────────────────────────────────────────────────────────────────────┴─> cert-manager-issuers ─┐
+                  └─> nginx-gateway-fabric ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┴─> gateways ─┐
+piraeus-operator ──> linstor-cluster ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+                                                                                                                                                                              └─> apps
 ```
 
 `external-secrets-certs` also depends on `cert-manager` directly (it needs the Issuer and
 Certificate CRDs). `cert-manager-issuers` holds the `letsencrypt` ClusterIssuer (DNS-01 via
 Cloudflare) and the `cloudflare-api-token` ExternalSecret it reads, so it needs both
-`cert-manager` and `external-secrets-store`. `gateway-api-crds` is defined directly in `infrastructure.yaml`
+`cert-manager` and `external-secrets-store`. `gateways` holds the single shared `bee-gateway` (wildcard TLS via the
+`letsencrypt` issuer, HTTP redirected to HTTPS) and waits for both `nginx-gateway-fabric` and `cert-manager-issuers`.
+Every service is exposed through it on a subdomain. There is no LoadBalancer controller:
+nginx-gateway-fabric runs its data plane as a DaemonSet with `hostPort` 80/443 on every node, so
+the kube-vip API VIP answers on 80/443 (gateway) as well as 6443 (API), whichever node holds it. `gateway-api-crds` is defined directly in `infrastructure.yaml`
 because its source is the upstream Gateway API repository.
 
 To add a unit: create `infrastructure/<cluster>/<unit>/base/`, then add a Kustomization

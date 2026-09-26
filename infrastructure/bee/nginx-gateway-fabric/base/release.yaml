@@ -27,4 +27,17 @@ spec:
     namespace: flux-system
   install:
     createNamespace: true
-  values: {}
+  values:
+    nginx:
+      kind: daemonSet
+      service:
+        type: NodePort
+      container:
+        hostPorts:
+          - port: 80
+            containerPort: 80
+          - port: 443
+            containerPort: 443
+      pod:
+        tolerations:
+          - operator: Exists
