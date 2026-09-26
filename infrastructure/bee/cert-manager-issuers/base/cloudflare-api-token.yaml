@@ -1,0 +1,14 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: cloudflare-api-token
+  namespace: cert-manager
+spec:
+  refreshInterval: 24h
+  secretStoreRef:
+    name: bitwarden-secrets-manager
+    kind: ClusterSecretStore
+  data:
+  - secretKey: api-token
+    remoteRef:
+      key: "cloudflare-api-token/api-token"

@@ -12,6 +12,7 @@ spec:
     - name: linstor-cluster
     - name: external-secrets-store
     - name: nginx-gateway-fabric
+    - name: cert-manager-issuers
   interval: 1h
   retryInterval: 1m
   timeout: 5m

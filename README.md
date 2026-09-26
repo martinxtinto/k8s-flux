@@ -36,14 +36,17 @@ otherwise both environments point their Kustomization at `base/`.
 `bee` infrastructure units, and what each waits for:
 
 ```
-gateway-api-crds ─┬─> cert-manager ──> external-secrets ──> external-secrets-certs ──> bitwarden-sdk-server ──> external-secrets-store ─┐
-                  └─> nginx-gateway-fabric ─────────────────────────────────────────────────────────────────────────────────────────────┤
-piraeus-operator ──> linstor-cluster ───────────────────────────────────────────────────────────────────────────────────────────────────┤
-                                                                                                                                         └─> apps
+gateway-api-crds ─┬─> cert-manager ─┬─> external-secrets ──> external-secrets-certs ──> bitwarden-sdk-server ──> external-secrets-store ─┬─> cert-manager-issuers ─┐
+                  │                 └────────────────────────────────────────────────────────────────────────────────────────────────────┘                         │
+                  └─> nginx-gateway-fabric ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+piraeus-operator ──> linstor-cluster ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+                                                                                                                                                                    └─> apps
 ```
 
 `external-secrets-certs` also depends on `cert-manager` directly (it needs the Issuer and
-Certificate CRDs). `gateway-api-crds` is defined directly in `infrastructure.yaml`
+Certificate CRDs). `cert-manager-issuers` holds the `letsencrypt` ClusterIssuer (DNS-01 via
+Cloudflare) and the `cloudflare-api-token` ExternalSecret it reads, so it needs both
+`cert-manager` and `external-secrets-store`. `gateway-api-crds` is defined directly in `infrastructure.yaml`
 because its source is the upstream Gateway API repository.
 
 To add a unit: create `infrastructure/<cluster>/<unit>/base/`, then add a Kustomization
