@@ -1,0 +1,86 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: storage-test
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-local
+  namespace: storage-test
+spec:
+  storageClassName: local
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-replicated
+  namespace: storage-test
+spec:
+  storageClassName: replicated
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Appends one line per pod start to a log on each volume. Delete the pod (or cordon its node)
+# and check that both logs keep their history and the pod comes back on the other node.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storage-test
+  namespace: storage-test
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: storage-test
+  template:
+    metadata:
+      labels:
+        app: storage-test
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      containers:
+      - name: writer
+        image: busybox:1.37
+        command:
+        - sh
+        - -c
+        - |
+          for v in local replicated; do
+            echo "$(date -u +%FT%TZ) pod=$(hostname) node=$NODE_NAME" >> /data/$v/log
+          done
+          sleep infinity
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: local
+          mountPath: /data/local
+        - name: replicated
+          mountPath: /data/replicated
+      volumes:
+      - name: local
+        persistentVolumeClaim:
+          claimName: data-local
+      - name: replicated
+        persistentVolumeClaim:
+          claimName: data-replicated
