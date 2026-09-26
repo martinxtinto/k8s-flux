@@ -28,12 +28,13 @@ spec:
     requests:
       storage: 1Gi
 ---
-# Appends one line per pod start to a log on each volume. Delete the pod (or cordon its node)
-# and check that both logs keep their history and the pod comes back on the other node.
+# One Deployment per volume, so the pinned `local` volume can't hold the `replicated` pod on its
+# node. Each appends a line per pod start to /data/log: history survives restarts, and the node
+# column shows where the pod ran.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: storage-test
+  name: storage-test-local
   namespace: storage-test
 spec:
   replicas: 1
@@ -41,11 +42,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: storage-test
+      app: storage-test-local
   template:
     metadata:
       labels:
-        app: storage-test
+        app: storage-test-local
     spec:
       securityContext:
         runAsNonRoot: true
@@ -58,9 +59,7 @@ spec:
         - sh
         - -c
         - |
-          for v in local replicated; do
-            echo "$(date -u +%FT%TZ) pod=$(hostname) node=$NODE_NAME" >> /data/$v/log
-          done
+          echo "$(date -u +%FT%TZ) pod=$(hostname) node=$NODE_NAME" >> /data/log
           sleep infinity
         env:
         - name: NODE_NAME
@@ -73,14 +72,57 @@ spec:
           capabilities:
             drop: ["ALL"]
         volumeMounts:
-        - name: local
-          mountPath: /data/local
-        - name: replicated
-          mountPath: /data/replicated
+        - name: data
+          mountPath: /data
       volumes:
-      - name: local
+      - name: data
         persistentVolumeClaim:
           claimName: data-local
-      - name: replicated
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storage-test-replicated
+  namespace: storage-test
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: storage-test-replicated
+  template:
+    metadata:
+      labels:
+        app: storage-test-replicated
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      containers:
+      - name: writer
+        image: busybox:1.37
+        command:
+        - sh
+        - -c
+        - |
+          echo "$(date -u +%FT%TZ) pod=$(hostname) node=$NODE_NAME" >> /data/log
+          sleep infinity
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
         persistentVolumeClaim:
           claimName: data-replicated
