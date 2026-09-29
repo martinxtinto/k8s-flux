@@ -55,6 +55,9 @@ spec:
         searchNamespace: monitoring
         # Dashboards are shipped as ConfigMaps; the sidecar does not need to read Secrets.
         resource: configmap
+        provider:
+          # Let dashboards provisioned from Git be edited in the UI.
+          allowUiUpdates: true
     # Do not let the chart create its default cluster-wide ClusterRole (which grants read on all
     # Secrets/ConfigMaps in every namespace). A namespaced Role granting ConfigMaps in `monitoring`
     # is declared below.

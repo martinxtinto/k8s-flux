@@ -4,4 +4,4 @@ resources:
 - ./grafana.yaml
 - ./secrets.yaml
 - ./route.yaml
-- ./dashboard.yaml
+- ./dashboards
