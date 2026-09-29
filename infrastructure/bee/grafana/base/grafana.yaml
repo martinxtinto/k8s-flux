@@ -67,12 +67,15 @@ spec:
       server:
         domain: grafana.xtinto.com
         root_url: https://grafana.xtinto.com
+      analytics:
+        reporting_enabled: false
+        check_for_updates: false
     resources:
       requests:
         cpu: 50m
-        memory: 64Mi
+        memory: 128Mi
       limits:
-        memory: 256Mi
+        memory: 512Mi
 ---
 # Replaces the chart's cluster-wide ClusterRole: Grafana's sidecar only needs to read dashboard
 # ConfigMaps, and only in the monitoring namespace.
