@@ -35,12 +35,26 @@ otherwise both environments point their Kustomization at `base/`.
 
 `bee` infrastructure units, and what each waits for:
 
-```
-gateway-api-crds ─┬─> cert-manager ─┬─> external-secrets ──> external-secrets-certs ──> bitwarden-sdk-server ──> external-secrets-store ─┐
-                  │                 └───────────────────────────────────────────────────────────────────────────────────────────────────┴─> cert-manager-issuers ─┐
-                  └─> nginx-gateway-fabric ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┴─> gateways ─┐
-piraeus-operator ──> linstor-cluster ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-                                                                                                                                                                              └─> apps (none yet)
+```mermaid
+flowchart TD
+  gateway-api-crds --> cert-manager
+  gateway-api-crds --> nginx-gateway-fabric
+  cert-manager --> external-secrets
+  cert-manager --> external-secrets-certs
+  external-secrets --> external-secrets-certs
+  external-secrets --> external-secrets-store
+  external-secrets-certs --> bitwarden-sdk-server
+  bitwarden-sdk-server --> external-secrets-store
+  cert-manager --> cert-manager-issuers
+  external-secrets-store --> cert-manager-issuers
+  nginx-gateway-fabric --> gateways
+  cert-manager-issuers --> gateways
+  piraeus-operator --> linstor-cluster
+  gateways --> apps
+  linstor-cluster --> apps
+  external-secrets-store --> apps
+  apps["apps (none yet)"]:::placeholder
+  classDef placeholder stroke-dasharray: 5 5
 ```
 
 `external-secrets-certs` also depends on `cert-manager` directly (it needs the Issuer and
@@ -67,6 +81,46 @@ inside a single unit.
 `external-secrets-store` becomes Ready only once the `bitwarden-access-token` Secret exists
 in the `external-secrets` namespace. Creating it is a manual bootstrap step, and everything
 that depends on the store (apps) waits until it is there.
+
+### Monitoring
+
+Prometheus and Grafana are split into separate units rather than one umbrella release:
+
+- `prometheus-operator` installs the Prometheus Operator and its CRDs. prometheus-community has no
+  maintained standalone operator chart (the `prometheus-operator` chart is deprecated), so the
+  `kube-prometheus-stack` chart is used with every bundled component disabled. It also ships the
+  Kubernetes control-plane `ServiceMonitor`s (kubelet/cAdvisor, kube-apiserver, CoreDNS), which
+  authenticate with the `prometheus-token` Secret created by the `prometheus` unit.
+- `node-exporter` (per-node CPU, memory, filesystem, network), `kube-state-metrics` (object and
+  workload state) and `alertmanager` each deploy a single component.
+- `prometheus` runs the Prometheus instance (15d retention on the `replicated` storage class), the
+  `ServiceAccount`/token it scrapes with, and a set of `PrometheusRule`s. Its selectors are empty, so
+  every `ServiceMonitor`/`PodMonitor`/`PrometheusRule` in every namespace is picked up.
+- `grafana` runs Grafana, exposed at `grafana.xtinto.com` through `bee-gateway`. Admin credentials
+  are generated once by the `grafana-passphrase` Job using the Bitwarden CLI
+  (`bw generate -p --words 3 --separator "." --includeNumber -c`), pushed to Bitwarden with
+  `PushSecret` (`updatePolicy: IfNotExists`) and pulled back by an `ExternalSecret`; an existing
+  Bitwarden value is never overwritten, so the password survives a cluster rebuild.
+
+```mermaid
+flowchart TD
+  prometheus-operator --> node-exporter
+  prometheus-operator --> kube-state-metrics
+  prometheus-operator --> alertmanager
+  node-exporter --> prometheus
+  kube-state-metrics --> prometheus
+  alertmanager --> prometheus
+  linstor-cluster --> prometheus
+  prometheus --> grafana
+  gateways --> grafana
+  external-secrets-store --> grafana
+  linstor-cluster --> grafana
+```
+
+To monitor an application, add a `ServiceMonitor` (or `PodMonitor`) next to its workload in
+`apps/<cluster>/<app>/base`, selecting its Service or pods. No labels are required — the Prometheus
+instance selects all of them. Apps without native Prometheus metrics still get pod/deployment state
+from kube-state-metrics and per-container CPU/memory from kubelet/cAdvisor.
 
 ### Clusters
 

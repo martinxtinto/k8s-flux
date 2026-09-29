@@ -1,0 +1,106 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: grafana
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: oci://ghcr.io/grafana-community/helm-charts/grafana
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+  ref:
+    tag: "13.2.7"
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grafana
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: monitoring
+  chartRef:
+    kind: OCIRepository
+    name: grafana
+    namespace: flux-system
+  install:
+    createNamespace: true
+  values:
+    fullnameOverride: grafana
+    admin:
+      # Secret created by the ExternalSecret in secrets.yaml (keys admin-user / admin-password).
+      existingSecret: grafana-admin
+    persistence:
+      enabled: true
+      storageClassName: replicated
+      size: 5Gi
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            uid: prometheus
+            access: proxy
+            url: http://prometheus.monitoring.svc:9090
+            isDefault: true
+            jsonData:
+              timeInterval: 30s
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        searchNamespace: monitoring
+        # Dashboards are shipped as ConfigMaps; the sidecar does not need to read Secrets.
+        resource: configmap
+    # Do not let the chart create its default cluster-wide ClusterRole (which grants read on all
+    # Secrets/ConfigMaps in every namespace). A namespaced Role granting ConfigMaps in `monitoring`
+    # is declared below.
+    rbac:
+      create: false
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+    grafana.ini:
+      server:
+        domain: grafana.xtinto.com
+        root_url: https://grafana.xtinto.com
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+---
+# Replaces the chart's cluster-wide ClusterRole: Grafana's sidecar only needs to read dashboard
+# ConfigMaps, and only in the monitoring namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana
+  namespace: monitoring
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: grafana
+subjects:
+  - kind: ServiceAccount
+    name: grafana
+    namespace: monitoring

@@ -1,0 +1,108 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# The Prometheus Operator is delivered by the kube-prometheus-stack chart with every bundled
+# component disabled. prometheus-community has no maintained standalone operator chart (the
+# `prometheus-operator` chart is deprecated), so this is the smallest official way to install the
+# operator and its CRDs. Prometheus, Alertmanager, Grafana, node-exporter and kube-state-metrics are
+# deployed separately.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: kube-prometheus-stack
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+  ref:
+    tag: "91.8.2"
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: monitoring
+  chartRef:
+    kind: OCIRepository
+    name: kube-prometheus-stack
+    namespace: flux-system
+  install:
+    crds: Create
+    createNamespace: true
+  upgrade:
+    crds: CreateReplace
+  values:
+    crds:
+      enabled: true
+    # Everything below is disabled: only the operator (and its CRDs) comes from this chart.
+    defaultRules:
+      create: false
+    alertmanager:
+      enabled: false
+    grafana:
+      enabled: false
+    prometheus:
+      enabled: false
+    thanosRuler:
+      enabled: false
+    nodeExporter:
+      enabled: false
+    kubeStateMetrics:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    kubeDns:
+      enabled: false
+    # Keep the Kubernetes control-plane ServiceMonitors (well-tested upstream config). They
+    # authenticate with the `prometheus-token` Secret created alongside the Prometheus instance,
+    # which is why the default `<sa>-token` authorization is overridden.
+    kubernetesServiceMonitors:
+      enabled: true
+    kubeApiServer:
+      enabled: true
+      serviceMonitor:
+        authorization:
+          type: Bearer
+          credentials:
+            name: prometheus-token
+            key: token
+    kubelet:
+      enabled: true
+      serviceMonitor:
+        authorization:
+          type: Bearer
+          credentials:
+            name: prometheus-token
+            key: token
+    coreDns:
+      enabled: true
+      serviceMonitor:
+        authorization:
+          type: Bearer
+          credentials:
+            name: prometheus-token
+            key: token
+    prometheusOperator:
+      enabled: true
+      # The operator manages a `kubelet` Service + Endpoints in kube-system from the node list;
+      # the kubelet ServiceMonitor selects it.
+      kubeletService:
+        enabled: true
+        name: kubelet
+      serviceMonitor:
+        selfMonitor: false
