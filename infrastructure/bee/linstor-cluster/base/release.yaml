@@ -26,6 +26,11 @@ spec:
     name: linstor-cluster
     namespace: flux-system
   values:
+    # Prometheus Operator integration: LINSTOR controller/satellite metrics, DRBD alert rules and
+    # the "Piraeus Datastore" Grafana dashboard (dashboard enabled by default). Prometheus already
+    # discovers monitors/rules in all namespaces, so no Prometheus changes are needed.
+    monitoring:
+      enabled: true
     linstorCluster:
       csiNode:
         enabled: true

@@ -52,7 +52,10 @@ spec:
       dashboards:
         enabled: true
         label: grafana_dashboard
-        searchNamespace: monitoring
+        # Watch our own dashboards plus the ones the Piraeus/LINSTOR chart creates in piraeus-datastore.
+        searchNamespace:
+          - monitoring
+          - piraeus-datastore
         # Dashboards are shipped as ConfigMaps; the sidecar does not need to read Secrets.
         resource: configmap
         provider:
@@ -102,6 +105,37 @@ kind: RoleBinding
 metadata:
   name: grafana
   namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: grafana
+subjects:
+  - kind: ServiceAccount
+    name: grafana
+    namespace: monitoring
+---
+# The Piraeus/LINSTOR chart ships its dashboard as a ConfigMap in piraeus-datastore; allow the
+# Grafana sidecar to read (only) ConfigMaps there.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana
+  namespace: piraeus-datastore
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana
+  namespace: piraeus-datastore
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
