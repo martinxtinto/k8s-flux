@@ -3,4 +3,3 @@ kind: Kustomization
 resources:
 - ./node-exporter-full.yaml
 - ./k8s-dashboard.yaml
-- ./k8s-storage-volumes.yaml
