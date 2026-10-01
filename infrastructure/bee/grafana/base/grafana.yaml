@@ -29,6 +29,12 @@ spec:
     createNamespace: true
   values:
     fullnameOverride: grafana
+    # The Grafana PVC is ReadWriteOnce. With the default RollingUpdate (maxSurge), a rollout that
+    # schedules the new pod on a different node deadlocks on Multi-Attach (new pod can't attach
+    # while the old one holds the volume, old one won't terminate until the new is ready).
+    # Recreate terminates the old pod first.
+    deploymentStrategy:
+      type: Recreate
     admin:
       # Secret created by the ExternalSecret in secrets.yaml (keys admin-user / admin-password).
       existingSecret: grafana-admin
