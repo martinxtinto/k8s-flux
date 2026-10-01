@@ -26,8 +26,6 @@ spec:
         namespace: flux-system
       interval: 24h
   values:
-    cni:
-      exclusive: false
     ipam:
       mode: kubernetes
     kubeProxyReplacement: true

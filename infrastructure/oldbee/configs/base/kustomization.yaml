@@ -6,5 +6,4 @@ resources:
 - tailscale.yaml
 - gateways.yaml
 - longhorn.yaml
-- kubevirt.yaml
 - gpu.yaml

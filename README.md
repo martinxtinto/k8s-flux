@@ -8,6 +8,7 @@ GitOps configuration for the homelab Kubernetes cluster(s), reconciled by
 ```
 clusters/          One directory per physical or virtual cluster, with one subdirectory per environment.
 apps/              Application workloads
+vms/               KubeVirt virtual machines
 infrastructure/    Cluster infrastructure: one directory per deployable unit.
 ```
 
@@ -50,10 +51,14 @@ flowchart TD
   nginx-gateway-fabric --> gateways
   cert-manager-issuers --> gateways
   piraeus-operator --> linstor-cluster
+  kubevirt-operator --> kubevirt
   gateways --> apps
   linstor-cluster --> apps
   external-secrets-store --> apps
+  kubevirt --> vms
+  linstor-cluster --> vms
   apps["apps (none yet)"]:::placeholder
+  vms["vms (none yet)"]:::placeholder
   classDef placeholder stroke-dasharray: 5 5
 ```
 
@@ -121,6 +126,26 @@ To monitor an application, add a `ServiceMonitor` (or `PodMonitor`) next to its 
 `apps/<cluster>/<app>/base`, selecting its Service or pods. No labels are required — the Prometheus
 instance selects all of them. Apps without native Prometheus metrics still get pod/deployment state
 from kube-state-metrics and per-container CPU/memory from kubelet/cAdvisor.
+
+### Virtual machines
+
+VMs are kept out of `apps/` and live in `vms/<cluster>/<vm>/base/`, with their own
+Kustomization in `clusters/<cluster>/<env>/vms.yaml` (absent until the first VM exists). It
+`dependsOn` `kubevirt` and `linstor-cluster`, plus `external-secrets-store` when cloud-init
+data comes from an `ExternalSecret`.
+
+KubeVirt (`kubevirt-operator` → `kubevirt`) is installed from the pinned upstream operator
+manifest with `virt-operator`, `virt-api` and `virt-controller` scaled to one replica, no CDI,
+no Multus, and the default pod network (`masquerade`). The `KubeVirt` CR has no `Ready`
+condition, so the `kubevirt` Kustomization health-checks it with a CEL `healthCheckExprs` on
+`Available`.
+
+Each VM boots an ephemeral `containerDisk` root (an OCI image carrying a qcow2/raw disk at
+`/disk/`) and keeps its state on a persistent LINSTOR data PVC; cloud-init (native to
+KubeVirt, no CDI) formats, mounts and initializes it. Mount the PVC at `/var` for
+bootc/immutable images and `/home` for mutable cloud images. Because the root is ephemeral, a
+VM returns to its pristine image on restart — OS updates mean rebuilding the containerDisk and
+restarting, not in-place upgrades.
 
 ### Clusters
 

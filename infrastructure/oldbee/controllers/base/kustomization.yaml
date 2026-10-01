@@ -10,6 +10,5 @@ resources:
 - external-secrets.yaml
 - tailscale.yaml
 - local-path-provisioner.yaml
-- kubevirt.yaml
 - node-feature-discovery.yaml
 - gpu.yaml
