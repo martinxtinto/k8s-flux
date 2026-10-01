@@ -18,3 +18,9 @@ spec:
       family: "bee"
   workloadUpdateStrategy:
     workloadUpdateMethods: []
+  customizeComponents:
+    patches:
+      - resourceType: DaemonSet
+        resourceName: virt-handler
+        type: strategic
+        patch: '{"spec":{"template":{"spec":{"volumes":[{"name":"kubelet-pods","hostPath":{"path":"/var/lib/k0s/kubelet/pods"}}]}}}}'
