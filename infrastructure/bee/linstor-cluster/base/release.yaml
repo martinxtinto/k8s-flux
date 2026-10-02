@@ -63,7 +63,7 @@ spec:
       - name: local
         annotations:
           storageclass.kubernetes.io/is-default-class: "true"
-        reclaimPolicy: Retain
+        reclaimPolicy: Delete
         allowVolumeExpansion: true
         volumeBindingMode: WaitForFirstConsumer
         provisioner: linstor.csi.linbit.com
@@ -73,7 +73,7 @@ spec:
           linstor.csi.linbit.com/allowRemoteVolumeAccess: "false"
       # two copies, one per node
       - name: replicated
-        reclaimPolicy: Retain
+        reclaimPolicy: Delete
         allowVolumeExpansion: true
         volumeBindingMode: WaitForFirstConsumer
         provisioner: linstor.csi.linbit.com
