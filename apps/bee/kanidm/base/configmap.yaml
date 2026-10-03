@@ -1,0 +1,26 @@
+---
+# Kanidm's server configuration. `tls_chain`/`tls_key` point at the cert-manager
+# `kanidm-tls` Secret mounted at /certs; the database lives on the `data` PVC at /data.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kanidm-config
+  namespace: kanidm
+data:
+  server.toml: |
+    version = "2"
+
+    # HTTPS (web UI/API/OIDC) and LDAPS, both served with the same certificate.
+    bindaddress = "0.0.0.0:8443"
+    ldapbindaddress = "0.0.0.0:3636"
+
+    db_path = "/data/kanidm.db"
+
+    tls_chain = "/certs/tls.crt"
+    tls_key = "/certs/tls.key"
+
+    # Must match the public hostname exactly: used for SPNs, webauthn and OAuth2.
+    domain = "idm.xtinto.com"
+    origin = "https://idm.xtinto.com"
+
+    log_level = "info"

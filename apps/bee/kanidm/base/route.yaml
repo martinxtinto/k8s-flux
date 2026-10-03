@@ -1,0 +1,33 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kanidm
+  namespace: kanidm
+spec:
+  parentRefs:
+    - name: bee-gateway
+      namespace: gateways
+      sectionName: xtinto.com-https
+  hostnames:
+    - idm.xtinto.com
+  rules:
+    - backendRefs:
+        - name: kanidm
+          port: 8443
+---
+# Kanidm serves TLS on 8443, so the gateway re-encrypts to the backend. The certificate
+# is Let's Encrypt-issued, so validation against the system trust store is enough.
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: kanidm
+  namespace: kanidm
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: kanidm
+  validation:
+    hostname: idm.xtinto.com
+    wellKnownCACertificates: System

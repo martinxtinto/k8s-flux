@@ -1,0 +1,16 @@
+---
+# Kanidm terminates TLS itself, so it needs its own certificate. Issued by the same
+# Let's Encrypt (DNS-01 via Cloudflare) issuer the gateway uses; the secret is mounted
+# into the pod and validated by the gateway via BackendTLSPolicy's system trust store.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kanidm-tls
+  namespace: kanidm
+spec:
+  secretName: kanidm-tls
+  dnsNames:
+    - idm.xtinto.com
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer

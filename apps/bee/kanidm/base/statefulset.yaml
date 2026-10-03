@@ -1,0 +1,91 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kanidm
+  namespace: kanidm
+spec:
+  serviceName: kanidm
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kanidm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kanidm
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # Matches the `kanidm` user in the image; also used to own the PVC.
+        runAsUser: 389
+        runAsGroup: 389
+        fsGroup: 389
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kanidm
+          image: kanidm/server:1.9.2
+          # The image entrypoint is /sbin/kanidmd; read the ConfigMap-provided config.
+          args:
+            - server
+            - -c
+            - /etc/kanidm/server.toml
+          ports:
+            - name: https
+              containerPort: 8443
+            - name: ldaps
+              containerPort: 3636
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /status
+              port: https
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /status
+              port: https
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/kanidm/server.toml
+              subPath: server.toml
+              readOnly: true
+            - name: tls
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: kanidm-config
+        - name: tls
+          secret:
+            secretName: kanidm-tls
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: replicated
+        resources:
+          requests:
+            storage: 1Gi
