@@ -27,7 +27,10 @@ spec:
       containers:
         - name: kanidm
           image: kanidm/server:1.9.2
-          # The image entrypoint is /sbin/kanidmd; read the ConfigMap-provided config.
+          # The image has no ENTRYPOINT (only `CMD ["/sbin/kanidmd", "server"]`), so
+          # `command` must carry the binary or `args` would be exec'd on their own.
+          command:
+            - /sbin/kanidmd
           args:
             - server
             - -c
