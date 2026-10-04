@@ -46,6 +46,9 @@ flowchart TD
   kubevirt-operator --> kubevirt
   gateways --> searxng
   external-secrets-store --> searxng
+  gateways --> degoog
+  external-secrets-store --> degoog
+  linstor-cluster --> degoog
   gateways --> kanidm
   linstor-cluster --> kanidm
   kubevirt --> vms
@@ -81,6 +84,7 @@ flowchart TD
 ### Apps
 
 - `searxng` — `searxng.xtinto.com`; depends on `gateways`, `external-secrets-store`.
+- `degoog` — `search.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
 - `kanidm` — `idm.xtinto.com`; depends on `gateways`, `linstor-cluster`.
 
 ### VMs

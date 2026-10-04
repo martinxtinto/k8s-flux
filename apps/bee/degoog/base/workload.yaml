@@ -1,0 +1,144 @@
+---
+# Degoog keeps all of its state (installed extensions, settings, SQLite index) under /app/data, so
+# the whole app survives a restart on a single LINSTOR-replicated volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: degoog-data
+  namespace: degoog
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: degoog
+  namespace: degoog
+spec:
+  replicas: 1
+  # The data PVC is ReadWriteOnce; Recreate tears the old pod down before starting the new one so a
+  # rollout can never deadlock on Multi-Attach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: degoog
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: degoog
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      # The upstream image's entrypoint starts as root, chowns /app/data and su-execs to 1000:1000.
+      # We run the main container unprivileged instead (see below) and let a throwaway init container
+      # do the chown so the app never needs root.
+      initContainers:
+        - name: init-data
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - chown -R 1000:1000 /app/data
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      containers:
+        - name: degoog
+          image: ghcr.io/degoog-org/degoog:1.0.0
+          # Override the root entrypoint: run the server directly as uid/gid 1000.
+          command:
+            - bun
+            - run
+            - src/server/index.ts
+          ports:
+            - name: http
+              containerPort: 4444
+          env:
+            - name: DEGOOG_PORT
+              value: "4444"
+            # Pins the public URL for the OpenSearch descriptor and sitemap.
+            - name: DEGOOG_BASE_URL
+              value: https://search.xtinto.com
+            # Trust the gateway's X-Forwarded-* headers so client IPs and scheme are correct.
+            - name: DEGOOG_DISTRUST_PROXY
+              value: "0"
+            # Let "restart server" exit and hand restarting back to Kubernetes.
+            - name: DEGOOG_DOCKER
+              value: "1"
+            # Visitors get a cut-down settings page; the admin panel lives at /admin behind the password.
+            - name: DEGOOG_PUBLIC_INSTANCE
+              value: "true"
+            # Created by the ExternalSecret in secrets.yaml.
+            - name: DEGOOG_SETTINGS_PASSWORDS
+              valueFrom:
+                secretKeyRef:
+                  name: degoog-settings-password
+                  key: password
+            # Throwaway tools (git, python, php, curl) expect a writable HOME; the data volume is it.
+            - name: HOME
+              value: /app/data
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: degoog-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: degoog
+  namespace: degoog
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: degoog
+  ports:
+    - name: http
+      port: 4444
+      targetPort: http

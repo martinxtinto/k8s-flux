@@ -1,0 +1,17 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: degoog
+  namespace: degoog
+spec:
+  parentRefs:
+    - name: bee-gateway
+      namespace: gateways
+      sectionName: xtinto.com-https
+  hostnames:
+    - search.xtinto.com
+  rules:
+    - backendRefs:
+        - name: degoog
+          port: 4444
