@@ -55,6 +55,9 @@ flowchart TD
   external-secrets-store --> librechat
   linstor-cluster --> librechat
   prometheus-operator --> librechat
+  gateways --> openwebui
+  external-secrets-store --> openwebui
+  linstor-cluster --> openwebui
   kubevirt --> vms
   linstor-cluster --> vms
   prometheus-operator --> node-exporter
@@ -93,6 +96,9 @@ flowchart TD
 - `librechat` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`,
   `prometheus-operator`. Official Helm chart with a hand-rolled MongoDB (official `mongo` image) and
   Meilisearch; Kanidm OIDC. The RAG API is disabled until an embeddings provider exists.
+- `openwebui` — `owui.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
+  Official Helm chart, SQLite on a `replicated` PVC, Kanidm OIDC. LLM connections are added later in
+  the admin panel.
 
 ### VMs
 

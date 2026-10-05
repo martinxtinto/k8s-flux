@@ -1,0 +1,161 @@
+---
+# Official Open WebUI chart from the project's own Helm repository. The bundled Ollama, Pipelines,
+# Tika and Terminals subcharts stay disabled; Open WebUI runs standalone with SQLite (plus uploads
+# and caches) on a single LINSTOR-replicated volume.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: open-webui
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://helm.openwebui.com
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: openwebui
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: openwebui
+  chart:
+    spec:
+      chart: open-webui
+      version: 16.6.0
+      sourceRef:
+        kind: HelmRepository
+        name: open-webui
+        namespace: flux-system
+      interval: 24h
+  install:
+    createNamespace: true
+  values:
+    fullnameOverride: openwebui
+
+    ollama:
+      enabled: false
+    pipelines:
+      enabled: false
+    tika:
+      enabled: false
+    terminals:
+      enabled: false
+
+    # Single replica: websocket support with the in-memory manager, so no bundled Redis is needed.
+    websocket:
+      enabled: true
+      manager: ""
+      redis:
+        enabled: false
+
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: replicated
+      accessModes:
+        - ReadWriteOnce
+
+    # Routing is handled by the Gateway API HTTPRoute the chart renders from these values; the same
+    # hostname also drives the auto-generated WEBUI_URL.
+    route:
+      enabled: true
+      apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      parentRefs:
+        - name: bee-gateway
+          namespace: gateways
+          sectionName: xtinto.com-https
+      hostnames:
+        - owui.xtinto.com
+      httpsRedirect: false
+
+    # LLM connections are configured later in Admin > Settings (persisted in the SQLite database).
+    enableOpenaiApi: false
+    ollamaUrls: []
+
+    sso:
+      enabled: true
+      enableSignup: true
+      oidc:
+        enabled: true
+        clientId: openwebui
+        # Secret owned by the ExternalSecret in secrets.yaml; required, so the pod waits for it.
+        clientExistingSecret: openwebui-oidc
+        clientExistingSecretKey: OPENID_CLIENT_SECRET
+        providerUrl: https://idm.xtinto.com/oauth2/openid/openwebui/.well-known/openid-configuration
+        providerName: Kanidm
+        # `groups_name` adds the `groups` claim (group names only) used for role mapping below.
+        scopes: openid email profile groups_name
+      # Kanidm is the only identity provider: no local signups and no password login form.
+      enableRoleManagement: true
+      roleManagement:
+        rolesClaim: groups
+        allowedRoles: openwebui_users,openwebui_admins
+        adminRoles: openwebui_admins
+
+    extraEnvVars:
+      # The chart derives WEBUI_URL from the route with an http scheme (it cannot know the Gateway
+      # terminates TLS), so set it explicitly; this also suppresses the chart's auto-generated one.
+      - name: WEBUI_URL
+        value: https://owui.xtinto.com
+      # Generated once by the Job in secrets.yaml and kept in Bitwarden, so sessions and encrypted
+      # OAuth tokens survive restarts and cluster rebuilds.
+      - name: WEBUI_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: openwebui-secrets
+            key: WEBUI_SECRET_KEY
+      - name: ENABLE_SIGNUP
+        value: "false"
+      - name: ENABLE_LOGIN_FORM
+        value: "false"
+      - name: DEFAULT_USER_ROLE
+        value: user
+      # Kanidm advertises PKCE S256 and requires it, so pin it instead of relying on discovery.
+      - name: OAUTH_CODE_CHALLENGE_METHOD
+        value: S256
+      - name: OPENID_REDIRECT_URI
+        value: https://owui.xtinto.com/oauth/oidc/callback
+      - name: ENABLE_OAUTH_ID_TOKEN_COOKIE
+        value: "false"
+
+    startupProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 5
+      failureThreshold: 30
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 20
+
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+
+    # The published image is built as root (upstream says non-root builds are untested), so the pod
+    # keeps root but drops every capability and forbids privilege escalation.
+    podSecurityContext:
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
