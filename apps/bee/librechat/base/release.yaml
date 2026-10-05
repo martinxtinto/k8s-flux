@@ -42,7 +42,7 @@ spec:
     global:
       librechat:
         # Holds CREDS_KEY, CREDS_IV, JWT_SECRET, JWT_REFRESH_SECRET, OPENID_SESSION_SECRET,
-        # MEILI_MASTER_KEY, METRICS_SECRET and (from its own ExternalSecret) OPENID_CLIENT_SECRET.
+        # MEILI_MASTER_KEY and METRICS_SECRET.
         existingSecretName: librechat-credentials-env
         # The chart's envFrom cannot compose the URI from a Secret, and it must never appear in the
         # ConfigMap, so it is injected as an explicit env var (env wins over envFrom).
@@ -52,6 +52,13 @@ spec:
               secretKeyRef:
                 name: librechat-mongo-uri
                 key: MONGO_URI
+          # Required (not optional) so the pod cannot start before External Secrets has written the
+          # Kanidm client secret; kubelet retries until it exists instead of running without OIDC.
+          - name: OPENID_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: librechat-oidc
+                key: OPENID_CLIENT_SECRET
 
     librechat:
       configEnv:
@@ -59,6 +66,9 @@ spec:
         DOMAIN_SERVER: https://chat.xtinto.com
         SEARCH: "true"
         MEILI_NO_ANALYTICS: "true"
+        # Single replica without Redis: assert it so the scheduler engine arms instead of refusing
+        # every schedule write because it cannot prove it is the only process.
+        SCHEDULES_SINGLE_PROCESS: "true"
         # Kanidm is the only identity provider; local accounts stay disabled. OpenID registration
         # cannot be disabled separately, so access is gated by the Kanidm scope map instead.
         ALLOW_EMAIL_LOGIN: "false"
