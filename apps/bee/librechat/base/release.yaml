@@ -67,6 +67,9 @@ spec:
         ALLOW_SOCIAL_REGISTRATION: "true"
         OPENID_CLIENT_ID: librechat
         OPENID_ISSUER: https://idm.xtinto.com/oauth2/openid/librechat
+        # The app concatenates this with DOMAIN_SERVER; without it the redirect URI ends in
+        # the literal "undefined" and Kanidm rejects the request with invalid_origin.
+        OPENID_CALLBACK_URL: /oauth/openid/callback
         # `groups_name` adds the `groups` claim (group names only) used for admin mapping below.
         OPENID_SCOPE: openid profile email groups_name
         # Kanidm requires PKCE S256 for every client.
