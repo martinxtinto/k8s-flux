@@ -51,10 +51,6 @@ flowchart TD
   linstor-cluster --> degoog
   gateways --> kanidm
   linstor-cluster --> kanidm
-  gateways --> librechat
-  external-secrets-store --> librechat
-  linstor-cluster --> librechat
-  prometheus-operator --> librechat
   gateways --> openwebui
   external-secrets-store --> openwebui
   linstor-cluster --> openwebui
@@ -93,10 +89,7 @@ flowchart TD
 - `searxng` — `searxng.xtinto.com`; depends on `gateways`, `external-secrets-store`.
 - `degoog` — `search.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
 - `kanidm` — `idm.xtinto.com`; depends on `gateways`, `linstor-cluster`.
-- `librechat` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`,
-  `prometheus-operator`. Official Helm chart with a hand-rolled MongoDB (official `mongo` image) and
-  Meilisearch; Kanidm OIDC. The RAG API is disabled until an embeddings provider exists.
-- `openwebui` — `owui.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
+- `openwebui` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
   Official Helm chart, SQLite on a `replicated` PVC, Kanidm OIDC. LLM connections are added later in
   the admin panel.
 

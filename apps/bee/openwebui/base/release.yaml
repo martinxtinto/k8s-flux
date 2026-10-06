@@ -67,7 +67,7 @@ spec:
           namespace: gateways
           sectionName: xtinto.com-https
       hostnames:
-        - owui.xtinto.com
+        - chat.xtinto.com
       httpsRedirect: false
 
     # LLM connections are configured later in Admin > Settings (persisted in the SQLite database).
@@ -98,7 +98,7 @@ spec:
       # The chart derives WEBUI_URL from the route with an http scheme (it cannot know the Gateway
       # terminates TLS), so set it explicitly; this also suppresses the chart's auto-generated one.
       - name: WEBUI_URL
-        value: https://owui.xtinto.com
+        value: https://chat.xtinto.com
       # Generated once by the Job in secrets.yaml and kept in Bitwarden, so sessions and encrypted
       # OAuth tokens survive restarts and cluster rebuilds.
       - name: WEBUI_SECRET_KEY
@@ -116,7 +116,7 @@ spec:
       - name: OAUTH_CODE_CHALLENGE_METHOD
         value: S256
       - name: OPENID_REDIRECT_URI
-        value: https://owui.xtinto.com/oauth/oidc/callback
+        value: https://chat.xtinto.com/oauth/oidc/callback
       - name: ENABLE_OAUTH_ID_TOKEN_COOKIE
         value: "false"
 
