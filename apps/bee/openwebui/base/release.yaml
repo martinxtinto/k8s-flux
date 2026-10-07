@@ -33,6 +33,12 @@ spec:
   values:
     fullnameOverride: openwebui
 
+    # Upstream slim build (<appVersion>-slim): no bundled Ollama/CUDA, torch/chromadb or sourcemaps.
+    # Local RAG embeddings and the bundled document parsers are unavailable; add an external
+    # embedding endpoint/vector store if Knowledge search is enabled later.
+    image:
+      useSlim: true
+
     ollama:
       enabled: false
     pipelines:
