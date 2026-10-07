@@ -39,6 +39,15 @@ spec:
     image:
       useSlim: true
 
+    # The slim image has nothing under /app/backend/data (the standard image bakes its model caches
+    # there), so the chart's default `cp -R -n /app/backend/data/* ...` fails on the unmatched glob.
+    # Copy the directory contents instead, which is a no-op when empty.
+    copyAppData:
+      command:
+        - sh
+        - -c
+        - cp -R -n /app/backend/data/. /tmp/app-data/
+
     ollama:
       enabled: false
     pipelines:
