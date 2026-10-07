@@ -44,8 +44,6 @@ flowchart TD
   piraeus-operator --> linstor-cluster
   prometheus-operator --> linstor-cluster
   kubevirt-operator --> kubevirt
-  gateways --> searxng
-  external-secrets-store --> searxng
   gateways --> degoog
   external-secrets-store --> degoog
   linstor-cluster --> degoog
@@ -86,7 +84,6 @@ flowchart TD
 
 ### Apps
 
-- `searxng` — `searxng.xtinto.com`; depends on `gateways`, `external-secrets-store`.
 - `degoog` — `search.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
 - `kanidm` — `idm.xtinto.com`; depends on `gateways`, `linstor-cluster`.
 - `openwebui` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
