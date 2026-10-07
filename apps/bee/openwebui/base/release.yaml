@@ -33,21 +33,6 @@ spec:
   values:
     fullnameOverride: openwebui
 
-    # Upstream slim build (<appVersion>-slim): no bundled Ollama/CUDA, torch/chromadb or sourcemaps.
-    # Local RAG embeddings and the bundled document parsers are unavailable; add an external
-    # embedding endpoint/vector store if Knowledge search is enabled later.
-    image:
-      useSlim: true
-
-    # The slim image has nothing under /app/backend/data (the standard image bakes its model caches
-    # there), so the chart's default `cp -R -n /app/backend/data/* ...` fails on the unmatched glob.
-    # Copy the directory contents instead, which is a no-op when empty.
-    copyAppData:
-      command:
-        - sh
-        - -c
-        - cp -R -n /app/backend/data/. /tmp/app-data/
-
     ollama:
       enabled: false
     pipelines:
