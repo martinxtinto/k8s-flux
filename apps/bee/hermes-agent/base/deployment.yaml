@@ -64,9 +64,10 @@ spec:
       containers:
         - name: hermes-agent
           image: nousresearch/hermes-agent:v0.21.6
-          # The image's entrypoint is kept (s6 needs to be PID 1 for supervision); the command
-          # selects gateway mode, which also brings up the supervised dashboard.
-          command:
+          # The image's entrypoint (/opt/hermes/docker/entrypoint-dispatch.sh) is kept so s6-overlay
+          # runs as PID 1; `args` selects gateway mode (the k8s equivalent of `docker run <image>
+          # gateway run`). Note: k8s `command` would replace the ENTRYPOINT, so it must not be used.
+          args:
             - gateway
             - run
           ports:
