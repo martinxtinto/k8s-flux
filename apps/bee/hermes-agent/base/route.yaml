@@ -1,0 +1,84 @@
+---
+# hermes.xtinto.com, behind the shared bee-gateway. Each backend gets its own top-level prefix:
+#   - /api/v1/*     -> the OpenAI-compatible API server, rewritten to /v1/* upstream
+#   - /dashboard/*  -> the web dashboard UI and its own management API
+#   - everything else -> a redirect to /dashboard/
+# The OpenAI-compatible API server's native /api/* management endpoints are intentionally NOT
+# exposed; only /v1/* is reachable, which also keeps them clear of the dashboard's /api/* routes.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: hermes-agent
+  namespace: hermes-agent
+spec:
+  parentRefs:
+    - name: bee-gateway
+      namespace: gateways
+      sectionName: xtinto.com-https
+  hostnames:
+    - hermes.xtinto.com
+  rules:
+    # OpenAI-compatible API: base URL for clients is https://hermes.xtinto.com/api/v1.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/v1
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /v1
+      backendRefs:
+        - name: hermes-agent
+          port: 8642
+    # Exact bare prefix: rewrite to the dashboard root and tell the SPA (via X-Forwarded-Prefix)
+    # that it is served under /dashboard so it builds its own /api/* URLs correctly.
+    - matches:
+        - path:
+            type: Exact
+            value: /dashboard
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Prefix
+                value: /dashboard
+      backendRefs:
+        - name: hermes-agent
+          port: 9119
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /dashboard/
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Prefix
+                value: /dashboard
+      backendRefs:
+        - name: hermes-agent
+          port: 9119
+    # Least specific match, so it only catches paths not handled above.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /dashboard/
+            statusCode: 302

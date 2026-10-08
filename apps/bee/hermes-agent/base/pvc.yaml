@@ -1,0 +1,19 @@
+---
+# Hermes keeps all of its state under HERMES_HOME (/opt/data in the image): config.yaml, .env,
+# state.db (SQLite in WAL mode), sessions, memories, skills, cron jobs and logs. One
+# LINSTOR-replicated volume backs all of it, so sessions and the agent's self-improvement survive
+# restarts and image upgrades. Hermes refuses to run two gateway processes against the same data
+# directory, so the Deployment mounts this ReadWriteOnce claim with a Recreate strategy (a
+# RollingUpdate would deadlock on Multi-Attach).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-data
+  namespace: hermes-agent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 5Gi

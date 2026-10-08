@@ -1,0 +1,113 @@
+---
+# The agent runs arbitrary terminal commands by design, so the namespace is locked down. Traffic is
+# default-denied in both directions and only the minimum is allowed back in: DNS, the public
+# internet (for OpenRouter and web tools), the gateway VIP (for Kanidm OIDC) and ingress from the
+# NGINX Gateway Fabric data plane. In particular the agent cannot reach any other pod, any Service
+# (including the Kubernetes API and the external-secrets/LINSTOR control planes), the node IPs
+# (kubelet + API server), the rest of the LAN, or the cloud metadata endpoint.
+#
+# The cluster-specific values (podCIDR, serviceCIDR, dnsServiceIP, lanCIDR, gatewayVIP) are
+# substituted per env by Flux postBuild in the apps.yaml Kustomization.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: hermes-agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Ingress only from the Gateway data plane. The bee-gateway nginx pods live in the `gateways`
+# namespace; everything else in the cluster is refused before it reaches the API or dashboard.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-gateway
+  namespace: hermes-agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateways
+      ports:
+        - port: 8642
+          protocol: TCP
+        - port: 9119
+          protocol: TCP
+---
+# DNS to CoreDNS only. kube-router evaluates egress after Service DNAT (against pod IPs), so the
+# pod selector is what matches; the ClusterIP entry keeps the rule correct on CNIs that evaluate
+# before DNAT.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: hermes-agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        - ipBlock:
+            cidr: ${dnsServiceIP}/32
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# The internet, minus everything internal: pod CIDR (no pod-to-pod), Service CIDR (no Kubernetes
+# API or any other Service), the LAN (no node APIs/kubelet or homelab hosts) and link-local
+# (no cloud metadata). Both the pod CIDR and the Service CIDR are excluded so this holds whether
+# the CNI evaluates egress before or after Service DNAT.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-internet
+  namespace: hermes-agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - ${podCIDR}
+              - ${serviceCIDR}
+              - ${lanCIDR}
+              - 169.254.0.0/16
+---
+# Kanidm OIDC discovery and token exchange. idm.xtinto.com resolves to the gateway VIP, which the
+# rule above excludes with the rest of the LAN, so it is re-allowed here for the dashboard's login
+# flow.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-oidc
+  namespace: hermes-agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: ${gatewayVIP}/32
+      ports:
+        - port: 443
+          protocol: TCP

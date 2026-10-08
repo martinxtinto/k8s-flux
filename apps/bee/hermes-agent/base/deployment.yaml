@@ -1,0 +1,145 @@
+---
+# Hermes Agent in gateway mode. The official image boots s6-overlay as PID 1, which supervises the
+# gateway (and, with HERMES_DASHBOARD=1, the web dashboard and its management API) and reaps
+# orphaned tool processes. The gateway exposes the OpenAI-compatible API server on :8642 and the
+# dashboard on :9119; both are reached only through the gateway (see route.yaml and netpol.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-agent
+  namespace: hermes-agent
+spec:
+  replicas: 1
+  # The data PVC is ReadWriteOnce and Hermes forbids two gateways sharing one data directory;
+  # Recreate tears the old pod down before starting the new one so a rollout cannot deadlock on
+  # Multi-Attach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hermes-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hermes-agent
+    spec:
+      securityContext:
+        # The image's s6-overlay stage2 hook remaps the runtime user, chowns /opt/data and seeds
+        # HERMES_HOME, then drops to UID 10000 for every supervised service. That boot step needs
+        # root, so the pod (matching the project's own container) is not runAsNonRoot.
+        fsGroup: 10000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      # Seed config.yaml only on the very first boot. Once it exists the dashboard owns the file
+      # (its Config page writes it), so later restarts must not overwrite it.
+      initContainers:
+        - name: seed-config
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              if [ -f /opt/data/config.yaml ]; then
+                echo "config.yaml already exists; leaving it untouched"
+              else
+                cp /config/config.yaml /opt/data/config.yaml
+                echo "seeded /opt/data/config.yaml"
+              fi
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/data
+            - name: config
+              mountPath: /config
+              readOnly: true
+      containers:
+        - name: hermes-agent
+          image: nousresearch/hermes-agent:v0.21.6
+          # The image's entrypoint is kept (s6 needs to be PID 1 for supervision); the command
+          # selects gateway mode, which also brings up the supervised dashboard.
+          command:
+            - gateway
+            - run
+          ports:
+            - name: api
+              containerPort: 8642
+            - name: dashboard
+              containerPort: 9119
+          env:
+            - name: HERMES_DASHBOARD
+              value: "1"
+            - name: API_SERVER_ENABLED
+              value: "true"
+            - name: API_SERVER_HOST
+              value: "0.0.0.0"
+            - name: API_SERVER_PORT
+              value: "8642"
+            # Strict CORS: no browser origins are allowed, so only non-browser OpenAI clients (which
+            # do not send Origin) can call the API. API_SERVER_CORS_ORIGINS is intentionally unset
+            # rather than widened.
+            #
+            # API_SERVER_KEY is not set here: on first boot the image generates a strong key into
+            # /opt/data/.env, where the dashboard's API Keys page can read and rotate it.
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+          # /health is the API server's unauthenticated liveness endpoint.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: api
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            # Root is needed only for the s6 boot step; capabilities are reduced to exactly what the
+            # stage2 hook uses (chown/usermod the data volume, then s6-setuidgid to the runtime
+            # user) and the supervised services run as UID 10000.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - SETUID
+                - SETGID
+                - KILL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: hermes-data
+        - name: config
+          configMap:
+            name: hermes-config

@@ -1,0 +1,33 @@
+---
+# Seed for HERMES_HOME/config.yaml, copied by the init container only when that file is absent.
+# Hermes seeds its own example config on first boot, but the dashboard's auth gate must be
+# configured before the dashboard can start on a non-loopback bind (it fails closed otherwise), and
+# that bootstrap cannot come from inside the dashboard itself.
+#
+# Everything else — model provider, default model, the OpenRouter API key — is owned by the
+# dashboard after first boot: its Config page writes config.yaml and its API Keys page writes .env
+# on the /opt/data volume. This seed is never re-applied, so those changes survive restarts.
+#
+# The cluster-specific network value (podCIDR) is substituted per env by Flux postBuild.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-config
+  namespace: hermes-agent
+data:
+  config.yaml: |
+    dashboard:
+      # The dashboard is served under /dashboard; public_url is used verbatim to build the OAuth
+      # callback: https://hermes.xtinto.com/dashboard/auth/callback.
+      public_url: https://hermes.xtinto.com/dashboard
+      # Trust forwarding headers only from the cluster pod network. This lets the NGINX Gateway
+      # Fabric data-plane pods' X-Forwarded-Proto drive secure cookies while ignoring headers from
+      # any other peer. Hermes refuses unbounded values like 0.0.0.0/0.
+      trusted_proxies:
+        - ${podCIDR}
+      oauth:
+        self_hosted:
+          # Kanidm is the only identity provider, as a public PKCE client (no secret); the redirect
+          # URI above must be registered on the client in Kanidm.
+          issuer: https://idm.xtinto.com/oauth2/openid/hermes-dashboard
+          client_id: hermes-dashboard
