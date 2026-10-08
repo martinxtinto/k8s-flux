@@ -1,6 +1,7 @@
 ---
-# The service is named after the Helm release (`vaultwarden`) because the release name contains
-# the chart name; the wildcard certificate on the listener covers passwords.xtinto.com.
+# Flux names the release `<targetNamespace>-<name>` (`vaultwarden-vaultwarden`), which contains the
+# chart name, so the chart's Service is named after the release. The wildcard certificate on the
+# listener covers passwords.xtinto.com.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -15,5 +16,5 @@ spec:
     - passwords.xtinto.com
   rules:
     - backendRefs:
-        - name: vaultwarden
+        - name: vaultwarden-vaultwarden
           port: 80

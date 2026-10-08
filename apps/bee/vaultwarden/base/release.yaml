@@ -48,10 +48,9 @@ spec:
       repository: dani-garcia/vaultwarden
       tag: "1.37.4-alpine"
     replicas: 1
-    # The data PVC is ReadWriteOnce; Recreate stops the old pod before starting the new one so a
-    # rollout can never deadlock on Multi-Attach.
-    strategy:
-      type: Recreate
+    # The chart renders a StatefulSet for SQLite; its default RollingUpdate (OrderedReady) tears the
+    # old pod down before starting the new one, so the ReadWriteOnce PVC cannot deadlock on
+    # Multi-Attach.
     storage:
       existingVolumeClaim:
         claimName: vaultwarden-data
