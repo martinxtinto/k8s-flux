@@ -1,0 +1,101 @@
+---
+# Vaultwarden on passwords.xtinto.com. SQLite (database and attachments) lives on a single
+# LINSTOR-replicated volume, so there is no database dependency: bee has no PostgreSQL operator.
+# Credentials are imported from the old instance manually via the web vault's export/import; the
+# first account is created with an admin-panel invite, so signups stay disabled.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vaultwarden-data
+  namespace: vaultwarden
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: vaultwarden
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://guerzon.github.io/vaultwarden
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vaultwarden
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: vaultwarden
+  chart:
+    spec:
+      chart: vaultwarden
+      version: 0.46.3
+      sourceRef:
+        kind: HelmRepository
+        name: vaultwarden
+        namespace: flux-system
+      interval: 24h
+  values:
+    image:
+      registry: ghcr.io
+      repository: dani-garcia/vaultwarden
+      tag: "1.37.4-alpine"
+    replicas: 1
+    # The data PVC is ReadWriteOnce; Recreate stops the old pod before starting the new one so a
+    # rollout can never deadlock on Multi-Attach.
+    strategy:
+      type: Recreate
+    storage:
+      existingVolumeClaim:
+        claimName: vaultwarden-data
+        dataPath: /data
+    # Default is SQLite (db.sqlite3 under /data).
+    database:
+      type: default
+    domain: "https://passwords.xtinto.com"
+    sendsAllowed: "true"
+    signupsAllowed: false
+    # No SMTP yet: an invited user must not depend on a verification email being delivered.
+    signupsVerify: "false"
+    invitationsAllowed: false
+    emailChangeAllowed: "true"
+    showPassHint: "false"
+    requireDeviceEmail: "false"
+    extendedLogging: "true"
+    ipHeader: "X-Forwarded-For"
+    iconService: "internal"
+    orgGroupsEnabled: "false"
+    timeZone: "America/Argentina/Buenos_Aires"
+    # Owned by the ExternalSecret in secrets.yaml; the gateway cannot reach the admin panel without it.
+    adminToken:
+      existingSecret: "vaultwarden-secrets"
+      existingSecretKey: "admin-pass"
+    podSecurityContext:
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi

@@ -52,6 +52,9 @@ flowchart TD
   gateways --> openwebui
   external-secrets-store --> openwebui
   linstor-cluster --> openwebui
+  gateways --> vaultwarden
+  external-secrets-store --> vaultwarden
+  linstor-cluster --> vaultwarden
   kubevirt --> vms
   linstor-cluster --> vms
   prometheus-operator --> node-exporter
@@ -89,6 +92,9 @@ flowchart TD
 - `openwebui` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
   Official Helm chart, SQLite on a `replicated` PVC, Kanidm OIDC. LLM connections are added later in
   the admin panel.
+- `vaultwarden` — `passwords.xtinto.com`; depends on `gateways`, `external-secrets-store`,
+  `linstor-cluster`. Official Helm chart, SQLite on a `replicated` PVC. Credentials are imported
+  from the old instance via the web vault's export/import.
 
 ### VMs
 

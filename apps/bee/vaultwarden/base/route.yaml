@@ -1,0 +1,19 @@
+---
+# The service is named after the Helm release (`vaultwarden`) because the release name contains
+# the chart name; the wildcard certificate on the listener covers passwords.xtinto.com.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vaultwarden
+  namespace: vaultwarden
+spec:
+  parentRefs:
+    - name: bee-gateway
+      namespace: gateways
+      sectionName: xtinto.com-https
+  hostnames:
+    - passwords.xtinto.com
+  rules:
+    - backendRefs:
+        - name: vaultwarden
+          port: 80
