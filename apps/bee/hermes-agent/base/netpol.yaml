@@ -92,9 +92,10 @@ spec:
               - ${lanCIDR}
               - 169.254.0.0/16
 ---
-# Kanidm OIDC discovery and token exchange. idm.xtinto.com resolves to the gateway VIP, which the
-# rule above excludes with the rest of the LAN, so it is re-allowed here for the dashboard's login
-# flow.
+# Kanidm OIDC discovery and token exchange. idm.xtinto.com resolves to the gateway VIP, which
+# kube-router DNATs to the Gateway data-plane pods (in the `gateways` namespace) before egress
+# policy is evaluated, so the pod selector is what matches; the VIP ipBlock keeps the rule correct
+# on CNIs that evaluate before DNAT.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -106,6 +107,12 @@ spec:
     - Egress
   egress:
     - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateways
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bee-gateway-nginx
         - ipBlock:
             cidr: ${gatewayVIP}/32
       ports:
