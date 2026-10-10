@@ -61,6 +61,26 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
+  name: outline
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: gateways
+    - name: external-secrets-store
+    - name: linstor-cluster
+  interval: 1h
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/bee/outline/base
+  prune: false
+  wait: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
   name: vaultwarden
   namespace: flux-system
 spec:
