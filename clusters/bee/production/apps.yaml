@@ -124,3 +124,24 @@ spec:
       dnsServiceIP: 10.96.0.10
       lanCIDR: 192.168.10.0/24
       gatewayVIP: 192.168.10.10
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: immich
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: gateways
+    - name: external-secrets-store
+    - name: linstor-cluster
+  interval: 1h
+  retryInterval: 1m
+  # The first sync pulls the multi-GB OpenVINO machine-learning image; allow more than the usual 5m.
+  timeout: 10m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/bee/immich/base
+  prune: false
+  wait: true

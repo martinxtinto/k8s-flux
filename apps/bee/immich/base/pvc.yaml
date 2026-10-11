@@ -1,0 +1,18 @@
+---
+# Immich's media store (the upstream UPLOAD_LOCATION): originals, uploads, profile images,
+# generated thumbnails and encoded videos, plus the automatic database dumps. One
+# LINSTOR-replicated volume is plenty for a homelab library; the `replicated` class allows online
+# expansion later. The chart does not create this claim itself (immich.persistence.library must
+# reference an existing PVC) and mounts it into the server pod at /data.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-library
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 100Gi

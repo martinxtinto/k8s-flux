@@ -1,0 +1,157 @@
+---
+# Official Immich chart, distributed as an OCI artifact. Pinned to 0.12.0 for the migration so
+# the server runs the same version as the source instance (v2.7.5); after the restore is verified
+# the OCIRepository tag and the image tags below are bumped to the current release in one commit.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: immich
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: oci://ghcr.io/immich-app/immich-charts/immich
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+  ref:
+    tag: "0.12.0"
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: immich
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: immich
+  chartRef:
+    kind: OCIRepository
+    name: immich
+    namespace: flux-system
+  values:
+    # Shared by server, machine-learning and valkey: the chart merges this top level into every
+    # component. The images all default to root but are locked down to no capabilities; the
+    # library/cache volumes get fsGroup 1000.
+    controllers:
+      main:
+        containers:
+          main:
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              seccompProfile:
+                type: RuntimeDefault
+            # Owned by the ExternalSecret in secrets.yaml; consumed by server and machine-learning
+            # via the generic DB_* variables.
+            env:
+              DB_HOSTNAME: immich-postgres
+              DB_USERNAME: immich
+              DB_DATABASE_NAME: immich
+              DB_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: immich-secrets
+                    key: POSTGRES_PASSWORD
+
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+
+    immich:
+      # ServiceMonitors for the server's API and microservices metrics. Prometheus discovers
+      # monitors in every namespace, so no labels are needed.
+      metrics:
+        enabled: true
+      persistence:
+        # The chart refuses to start without an existing library claim; pvc.yaml owns it and the
+        # server mounts it at /data. Declared here for every component that references it.
+        library:
+          existingClaim: immich-library
+
+    valkey:
+      # Redis protocol for caches, job queues and websocket pub/sub. The data is disposable, so the
+      # chart's default emptyDir persistence is kept (no PVC). The image runs as the valkey user
+      # (uid 999/gid 1000) like the other Valkey deployments in this repo.
+      enabled: true
+      defaultPodOptions:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 1000
+          fsGroup: 999
+          seccompProfile:
+            type: RuntimeDefault
+      controllers:
+        main:
+          containers:
+            main:
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+
+    server:
+      controllers:
+        main:
+          # The library PVC is ReadWriteOnce; Recreate tears the old pod down before starting the
+          # new one so a rollout can never deadlock on Multi-Attach.
+          strategy: Recreate
+          containers:
+            main:
+              image:
+                # Pinned to the source instance's version for the migration; bumped together with
+                # the chart tag once the restore is verified.
+                tag: v2.7.5
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 512Mi
+                limits:
+                  memory: 2Gi
+      persistence:
+        # QuickSync/VAAPI transcoding needs the Intel render nodes. `Directory` makes the mount
+        # fail on a node without them rather than silently falling back; add a node selector if
+        # only one bee node exposes /dev/dri.
+        dri:
+          type: hostPath
+          hostPath: /dev/dri
+          hostPathType: Directory
+          globalMounts:
+            - path: /dev/dri
+
+    machine-learning:
+      controllers:
+        main:
+          # The model cache PVC is ReadWriteOnce; Recreate avoids a Multi-Attach deadlock.
+          strategy: Recreate
+          containers:
+            main:
+              image:
+                # The OpenVINO variant accelerates inference on Intel CPUs (and GPUs), matching
+                # the source instance; bumped to v3.3.1-openvino together with the server.
+                tag: v2.7.5-openvino
+              env:
+                # Same model revision the upstream compose pins.
+                MACHINE_LEARNING_MODEL_REVISION: v2
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 1Gi
+                limits:
+                  memory: 4Gi
+      persistence:
+        # Persisting the downloaded/compiled models avoids re-downloading several GB after every
+        # restart or image upgrade.
+        cache:
+          enabled: true
+          type: persistentVolumeClaim
+          size: 10Gi
+          accessMode: ReadWriteOnce
+          storageClass: replicated
