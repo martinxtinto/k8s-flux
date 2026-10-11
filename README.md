@@ -116,7 +116,7 @@ flowchart TD
   reach DNS, the internet and the gateway VIP (Kanidm), never other pods or the Kubernetes API. The
   model, the OpenRouter key and `API_SERVER_KEY` (generated on first boot) are all managed in the
   dashboard, not in Git.
-- `immich` — `photos.xtinto.com`; depends on `gateways`, `external-secrets-store`,
+- `immich` — `immich.xtinto.com`; depends on `gateways`, `external-secrets-store`,
   `linstor-cluster`. Official OCI Helm chart with a bundled PostgreSQL 14 (VectorChord) StatefulSet
   and Valkey 9.1 on `replicated` volumes, OpenVINO machine learning with a persistent model cache
   and QuickSync/VAAPI transcoding through `/dev/dri`. Migrated from an existing v2.7.5 instance by
