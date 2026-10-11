@@ -41,7 +41,7 @@ spec:
               containerPort: 5432
           env:
             - name: POSTGRES_USER
-              value: immich
+              value: postgres
             - name: POSTGRES_DB
               value: immich
             - name: POSTGRES_PASSWORD
@@ -60,7 +60,7 @@ spec:
               command:
                 - pg_isready
                 - -U
-                - immich
+                - postgres
                 - -d
                 - immich
             initialDelaySeconds: 5
