@@ -95,14 +95,14 @@ spec:
             # Kanidm is the only identity provider: no email/SMTP and no local signups. The OAuth2
             # client `outline` already exists in Kanidm; the secret comes from Bitwarden.
             - name: OIDC_CLIENT_ID
-              value: outline
+              value: docs
             - name: OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: outline-oidc
                   key: OIDC_CLIENT_SECRET
             - name: OIDC_ISSUER_URL
-              value: https://idm.xtinto.com/oauth2/openid/outline
+              value: https://idm.xtinto.com/oauth2/openid/docs
             - name: OIDC_DISPLAY_NAME
               value: Kanidm
             - name: OIDC_SCOPES
