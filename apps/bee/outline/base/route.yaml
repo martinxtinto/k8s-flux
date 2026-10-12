@@ -10,7 +10,7 @@ spec:
       namespace: gateways
       sectionName: xtinto.com-https
   hostnames:
-    - outline.xtinto.com
+    - docs.xtinto.com
   rules:
     - backendRefs:
         - name: outline

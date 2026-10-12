@@ -100,7 +100,7 @@ flowchart TD
 - `openwebui` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
   Official Helm chart, SQLite on a `replicated` PVC, Kanidm OIDC. LLM connections are added later in
   the admin panel.
-- `outline` — `outline.xtinto.com`; depends on `gateways`, `external-secrets-store`,
+- `outline` — `docs.xtinto.com`; depends on `gateways`, `external-secrets-store`,
   `linstor-cluster`. Raw manifests with a bundled PostgreSQL 17 and Valkey 8 on `replicated` PVCs,
   local file storage and Kanidm OIDC. The Kanidm OAuth2 client `outline` already exists; its secret
   is stored manually in Bitwarden as `outline/oidc-client-secret`. Workspace data is imported in the
