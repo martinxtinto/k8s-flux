@@ -59,13 +59,6 @@ spec:
     database:
       type: default
     domain: "https://passwords.xtinto.com"
-    sendsAllowed: "true"
-    signupsAllowed: false
-    signupsVerify: "true"
-    invitationsAllowed: false
-    emailChangeAllowed: "true"
-    showPassHint: "false"
-    requireDeviceEmail: "false"
     extendedLogging: "true"
     ipHeader: "X-Forwarded-For"
     iconService: "internal"
@@ -75,17 +68,6 @@ spec:
     adminToken:
       existingSecret: "vaultwarden-secrets"
       existingSecretKey: "admin-pass"
-    smtp:
-      host: "mail.xtinto.com"
-      security: "starttls"
-      port: 587
-      from: "no-reply@mail.xtinto.com"
-      fromName: "Passwords Admin"
-      username: "no-reply@mail.xtinto.com"
-      password:
-        existingSecret: "vaultwarden-secrets"
-        existingSecretKey: "smtp-pass"
-      authMechanism: "Login"
     podSecurityContext:
       fsGroup: 1000
       fsGroupChangePolicy: OnRootMismatch
