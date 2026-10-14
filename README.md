@@ -45,7 +45,8 @@ flowchart TD
   prometheus-operator --> linstor-cluster
   kubevirt-operator --> kubevirt
   cert-manager --> intel-device-plugins-operator
-  node-feature-discovery --> intel-device-plugins-gpu
+  node-feature-discovery --> node-feature-rules
+  node-feature-rules --> intel-device-plugins-gpu
   intel-device-plugins-operator --> intel-device-plugins-gpu
   gateways --> degoog
   external-secrets-store --> degoog
@@ -96,7 +97,9 @@ flowchart TD
 - `prometheus-operator`, `node-exporter`, `kube-state-metrics`, `alertmanager`, `prometheus`,
   `grafana` — monitoring.
 - `kubevirt-operator`, `kubevirt` — virtualization.
-- `node-feature-discovery` — NFD with an Intel `NodeFeatureRule` that labels GPU nodes.
+- `node-feature-discovery`, `node-feature-rules` — NFD plus an Intel `NodeFeatureRule` that
+  labels GPU nodes (`intel.feature.node.kubernetes.io/gpu`). Split into two units because the
+  rule's CRD is installed by the NFD HelmRelease.
 - `intel-device-plugins-operator`, `intel-device-plugins-gpu` — Intel GPU device plugin
   (operator + `GpuDevicePlugin`), exposing `gpu.intel.com/i915`.
 

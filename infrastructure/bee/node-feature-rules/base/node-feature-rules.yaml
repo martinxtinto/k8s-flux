@@ -3,6 +3,10 @@
 # https://github.com/intel/intel-device-plugins-for-kubernetes/blob/v0.37.1/deployments/nfd/overlays/node-feature-rules/node-feature-rules.yaml
 # NFD labels nodes that expose an Intel display/3D or accelerator-class GPU driven
 # by i915 (Beelink S12 Pro / N100) or xe. The GpuDevicePlugin CR selects on this label.
+#
+# Kept in its own Flux Kustomization that dependsOn node-feature-discovery: the CRD this
+# manifest needs is installed by the NFD HelmRelease, so applying it in the same unit as
+# the release would fail the pre-apply dry-run.
 apiVersion: nfd.k8s-sigs.io/v1alpha1
 kind: NodeFeatureRule
 metadata:

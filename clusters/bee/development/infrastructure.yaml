@@ -380,6 +380,24 @@ spec:
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
+  name: node-feature-rules
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: node-feature-discovery
+  interval: 1h
+  retryInterval: 1m
+  timeout: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./infrastructure/bee/node-feature-rules/base
+  prune: false
+  wait: true
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
   name: intel-device-plugins-operator
   namespace: flux-system
 spec:
@@ -403,7 +421,7 @@ metadata:
 spec:
   dependsOn:
     - name: intel-device-plugins-operator
-    - name: node-feature-discovery
+    - name: node-feature-rules
   interval: 1h
   retryInterval: 1m
   timeout: 5m
