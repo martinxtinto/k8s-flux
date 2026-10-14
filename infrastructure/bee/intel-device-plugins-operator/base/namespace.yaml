@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: intel-device-plugins
+  labels:
+    # The GPU plugin DaemonSet mounts host devices and runs privileged, which
+    # the baseline/restricted Pod Security Standards would reject.
+    pod-security.kubernetes.io/enforce: privileged

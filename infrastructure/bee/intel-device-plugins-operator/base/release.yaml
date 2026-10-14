@@ -1,0 +1,34 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: intel
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://intel.github.io/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: intel-device-plugins-operator
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: intel-device-plugins
+  chart:
+    spec:
+      chart: intel-device-plugins-operator
+      version: 0.37.1
+      sourceRef:
+        kind: HelmRepository
+        name: intel
+        namespace: flux-system
+      interval: 24h
+  values:
+    # Only the GPU controller is registered; the other device CRDs still exist
+    # but no controller watches them. The chart's CRDs install on the first
+    # release only (Helm does not upgrade crds/), so CRDs are pinned here.
+    manager:
+      devices:
+        gpu: true

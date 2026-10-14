@@ -1,0 +1,9 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-feature-discovery
+  labels:
+    # The NFD worker needs privileged access to /sys and /proc to read hardware
+    # features; the Intel GPU NodeFeatureRule in node-feature-rules.yaml relies on it.
+    pod-security.kubernetes.io/enforce: privileged

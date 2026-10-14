@@ -44,6 +44,9 @@ flowchart TD
   piraeus-operator --> linstor-cluster
   prometheus-operator --> linstor-cluster
   kubevirt-operator --> kubevirt
+  cert-manager --> intel-device-plugins-operator
+  node-feature-discovery --> intel-device-plugins-gpu
+  intel-device-plugins-operator --> intel-device-plugins-gpu
   gateways --> degoog
   external-secrets-store --> degoog
   linstor-cluster --> degoog
@@ -63,6 +66,7 @@ flowchart TD
   gateways --> immich
   external-secrets-store --> immich
   linstor-cluster --> immich
+  intel-device-plugins-gpu --> immich
   kubevirt --> vms
   linstor-cluster --> vms
   prometheus-operator --> node-exporter
@@ -92,6 +96,9 @@ flowchart TD
 - `prometheus-operator`, `node-exporter`, `kube-state-metrics`, `alertmanager`, `prometheus`,
   `grafana` — monitoring.
 - `kubevirt-operator`, `kubevirt` — virtualization.
+- `node-feature-discovery` — NFD with an Intel `NodeFeatureRule` that labels GPU nodes.
+- `intel-device-plugins-operator`, `intel-device-plugins-gpu` — Intel GPU device plugin
+  (operator + `GpuDevicePlugin`), exposing `gpu.intel.com/i915`.
 
 ### Apps
 
@@ -117,11 +124,13 @@ flowchart TD
   model, the OpenRouter key and `API_SERVER_KEY` (generated on first boot) are all managed in the
   dashboard, not in Git.
 - `immich` — `immich.xtinto.com`; depends on `gateways`, `external-secrets-store`,
-  `linstor-cluster`. Official OCI Helm chart with a bundled PostgreSQL 14 (VectorChord) StatefulSet
-  and Valkey 9.1 on `replicated` volumes, OpenVINO machine learning with a persistent model cache
-  and QuickSync/VAAPI transcoding through `/dev/dri`. Migrated from an existing v2.7.5 instance by
-  restoring its database dump and library files into the `immich-library` PVC; chart and images are
-  pinned at v2.7.5 until the restore is verified, then bumped to v3.3.1. Kanidm OIDC.
+  `linstor-cluster`, `intel-device-plugins-gpu`. Official OCI Helm chart with a bundled
+  PostgreSQL 14 (VectorChord) StatefulSet and Valkey 9.1 on `replicated` volumes, OpenVINO
+  machine learning with a persistent model cache, and QuickSync/VAAPI transcoding plus iGPU
+  inference through the Intel GPU device plugin (`gpu.intel.com/i915`). Migrated from an existing
+  v2.7.5 instance by restoring its database dump and library files into the `immich-library` PVC;
+  chart and images are pinned at v2.7.5 until the restore is verified, then bumped to v3.3.1.
+  Kanidm OIDC.
 
 ### VMs
 

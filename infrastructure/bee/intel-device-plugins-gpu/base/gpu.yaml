@@ -1,0 +1,16 @@
+---
+apiVersion: deviceplugin.intel.com/v1
+kind: GpuDevicePlugin
+metadata:
+  name: gpu-device-plugin
+spec:
+  image: intel/intel-gpu-plugin:0.37.1
+  # Up to four containers share one iGPU, so immich's server and machine-learning
+  # pods (and any future transcoder) can land on the same node.
+  sharedDevNum: 4
+  preferredAllocationPolicy: balanced
+  enableMonitoring: false
+  # Only nodes NFD has labelled as having an Intel GPU (see the
+  # node-feature-discovery unit) get the plugin DaemonSet.
+  nodeSelector:
+    intel.feature.node.kubernetes.io/gpu: "true"

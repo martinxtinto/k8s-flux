@@ -135,6 +135,7 @@ spec:
     - name: gateways
     - name: external-secrets-store
     - name: linstor-cluster
+    - name: intel-device-plugins-gpu
   interval: 1h
   retryInterval: 1m
   # The first sync pulls the multi-GB OpenVINO machine-learning image; allow more than the usual 5m.

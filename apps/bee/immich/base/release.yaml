@@ -115,16 +115,9 @@ spec:
                   memory: 512Mi
                 limits:
                   memory: 2Gi
-      persistence:
-        # QuickSync/VAAPI transcoding needs the Intel render nodes. `Directory` makes the mount
-        # fail on a node without them rather than silently falling back; add a node selector if
-        # only one bee node exposes /dev/dri.
-        dri:
-          type: hostPath
-          hostPath: /dev/dri
-          hostPathType: Directory
-          globalMounts:
-            - path: /dev/dri
+                  # QuickSync/VAAPI transcoding. The Intel GPU device plugin injects the render
+                  # node and schedules the pod onto a node that exposes one.
+                  gpu.intel.com/i915: 1
 
     machine-learning:
       controllers:
@@ -146,6 +139,8 @@ spec:
                   memory: 1Gi
                 limits:
                   memory: 4Gi
+                  # OpenVINO inference on the iGPU through the same device plugin.
+                  gpu.intel.com/i915: 1
       persistence:
         # Persisting the downloaded/compiled models avoids re-downloading several GB after every
         # restart or image upgrade.
