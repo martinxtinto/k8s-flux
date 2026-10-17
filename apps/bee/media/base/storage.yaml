@@ -1,8 +1,8 @@
 ---
-# One shared media library and download tree, mounted by every app that needs the same files.
-# ReadWriteMany uses LINSTOR's NFS export, so Jellyfin, the *arr apps and qBittorrent can run on
-# either node without a Multi-Attach deadlock. Downloads and the library live on the same
-# filesystem so hardlinks and atomic moves work during imports.
+# One shared media library and download tree, mounted by Jellyfin and Arrmada's download stack.
+# ReadWriteMany uses LINSTOR's NFS export, so Jellyfin, Arrmada and qBittorrent can run on either
+# node without a Multi-Attach deadlock. Arrmada and qBittorrent both mount it at /storage so
+# imports hardlink instead of copying.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -16,8 +16,7 @@ spec:
     requests:
       storage: 250Gi
 ---
-# Per-app configuration. The *arr apps keep their SQLite databases and API keys here; Jellyfin
-# keeps metadata and library configuration here. Each claim is small, so two replicas are cheap.
+# Jellyfin metadata and library configuration.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -31,10 +30,11 @@ spec:
     requests:
       storage: 10Gi
 ---
+# Arrmada's database, backups and settings.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: sonarr-config
+  name: arrmada-data
   namespace: media
 spec:
   accessModes:
@@ -42,77 +42,13 @@ spec:
   storageClassName: replicated
   resources:
     requests:
-      storage: 2Gi
+      storage: 20Gi
 ---
+# qBittorrent settings and torrent list. Downloads live on media-data, not here.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: radarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: replicated
-  resources:
-    requests:
-      storage: 2Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: lidarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: replicated
-  resources:
-    requests:
-      storage: 2Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: prowlarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: replicated
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: bazarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: replicated
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: seerr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: replicated
-  resources:
-    requests:
-      storage: 2Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: qbittorrent-config
+  name: arrmada-qbittorrent-config
   namespace: media
 spec:
   accessModes:

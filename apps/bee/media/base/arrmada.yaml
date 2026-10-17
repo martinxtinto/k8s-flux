@@ -1,0 +1,192 @@
+---
+# Arrmada replaces the individual Sonarr/Radarr/Lidarr/Prowlarr/Bazarr/Seerr apps: one process
+# manages the libraries, indexers, requests and subtitles. qBittorrent and FlareSolverr stay
+# separate Deployments, matching Arrmada's Compose bundle and keeping their state isolated.
+#
+# /data holds Arrmada's database, backups and settings; Convert scratch uses an emptyDir at
+# /transcode. /storage is the shared media PVC. Both Arrmada and qBittorrent mount /storage at
+# the same path so imports hardlink.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arrmada
+  namespace: media
+spec:
+  replicas: 1
+  # The data PVC is ReadWriteOnce; Recreate avoids a Multi-Attach deadlock on rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arrmada
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arrmada
+        app.kubernetes.io/part-of: media
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        - name: init-media
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads/complete /storage/downloads/incomplete
+              chown 1000:1000 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
+              chmod 775 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: storage
+              mountPath: /storage
+        # Arrmada auto-registers qBittorrent and FlareSolverr on first start; wait until both
+        # Services have ready endpoints so that registration does not race their startup.
+        - name: wait-for-deps
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - |
+              until nc -z arrmada-qbittorrent 8080; do sleep 2; done
+              until nc -z arrmada-flaresolverr 8191; do sleep 2; done
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+      containers:
+        - name: arrmada
+          image: ghcr.io/tristenlammi/arrmada:0.3.0
+          ports:
+            - name: http
+              containerPort: 7878
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+            - name: ARRMADA_DATA_DIR
+              value: /data
+            - name: ARRMADA_LOG_LEVEL
+              value: info
+            - name: ARRMADA_QBITTORRENT_URL
+              value: http://arrmada-qbittorrent:8080
+            - name: ARRMADA_FLARESOLVERR_URL
+              value: http://arrmada-flaresolverr:8191
+            - name: ARRMADA_QBIT_PORT
+              value: "6881"
+            # Starting values for the browser setup. The folders chosen in the app win.
+            - name: ARRMADA_LIBRARY_DIR
+              value: /storage/media
+            - name: ARRMADA_DOWNLOADS_DIR
+              value: /storage/downloads/complete
+            - name: ARRMADA_MOVIES_DIR
+              value: /storage/media/movies
+            - name: ARRMADA_TV_DIR
+              value: /storage/media/tv
+            - name: ARRMADA_MUSIC_DIR
+              value: /storage/media/music
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            # The entrypoint starts as root, fixes ownership and GPU node permissions, then
+            # drops to PUID/PGID with gosu. SYS_NICE lets x265 pin its worker threads.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - SETUID
+                - SETGID
+                - KILL
+                - SYS_NICE
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+              # Arrmada uses /dev/dri for VAAPI/QuickSync Convert and Whisper; the Intel device
+              # plugin injects the render node and schedules the pod onto a GPU node.
+              gpu.intel.com/i915: 1
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: storage
+              mountPath: /storage
+            - name: transcode
+              mountPath: /transcode
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: arrmada-data
+        - name: storage
+          persistentVolumeClaim:
+            claimName: media-data
+        - name: transcode
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arrmada
+  namespace: media
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: arrmada
+  ports:
+    - name: http
+      port: 7878
+      targetPort: http

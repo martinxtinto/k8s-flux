@@ -137,15 +137,16 @@ flowchart TD
   v2.7.5 instance by restoring its database dump and library files into the `immich-library` PVC;
   chart and images are pinned at v2.7.5 until the restore is verified, then bumped to v3.3.1.
   Kanidm OIDC.
-- `media` — Jellyfin and the *arr stack: `jellyfin.xtinto.com`, `sonarr.xtinto.com`,
-  `radarr.xtinto.com`, `lidarr.xtinto.com`, `prowlarr.xtinto.com`, `bazarr.xtinto.com`,
-  `qbittorrent.xtinto.com`, `seerr.xtinto.com`; depends on `gateways`, `linstor-cluster`,
-  `intel-device-plugins-gpu`. One shared 250Gi `ReadWriteMany` LINSTOR/NFS volume holds
-  `/data/media` and `/data/downloads`, so the *arr apps hardlink imports and every workload can run
-  on either node. Each app keeps its configuration on a small `replicated` RWO PVC. Jellyfin uses
-  the Intel GPU for QuickSync/VAAPI transcoding. Authentication is each app's built-in login;
-  qBittorrent is outbound-only (no VPN, no inbound torrent port). The first qBittorrent password is
-  printed to the pod log and must be changed in the UI.
+- `media` — Jellyfin and Arrmada: `jellyfin.xtinto.com`, `arrmada.xtinto.com`; depends on
+  `gateways`, `linstor-cluster`, `intel-device-plugins-gpu`. Arrmada replaces the separate
+  Sonarr/Radarr/Lidarr/Prowlarr/Bazarr/Seerr apps: one app manages libraries, indexers, requests
+  and subtitles. qBittorrent and FlareSolverr run as separate internal-only Deployments; there is no
+  Prowlarr and no inbound torrent port. One shared 250Gi `ReadWriteMany` LINSTOR/NFS volume holds
+  `/storage/media` and `/storage/downloads`, so Arrmada and qBittorrent hardlink imports and can run
+  on either node. Arrmada keeps its database on a 20Gi `replicated` RWO PVC and qBittorrent its
+  settings on a 2Gi one; Jellyfin keeps metadata on a 10Gi PVC. Jellyfin uses the Intel GPU for
+  QuickSync/VAAPI transcoding, and Arrmada can use it for Convert and AI subtitles. Jellyfin and
+  Arrmada each use their own login; the qBittorrent password is shown inside Arrmada.
 
 ### VMs
 

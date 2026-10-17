@@ -1,0 +1,87 @@
+---
+# FlareSolverr solves Cloudflare challenges for Arrmada's indexers. Internal-only: no route
+# and no PVC. Chromium needs a larger /dev/shm than the Kubernetes 64Mi default.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arrmada-flaresolverr
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arrmada-flaresolverr
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arrmada-flaresolverr
+        app.kubernetes.io/part-of: media
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+          ports:
+            - name: http
+              containerPort: 8191
+          env:
+            - name: LOG_LEVEL
+              value: info
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arrmada-flaresolverr
+  namespace: media
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: arrmada-flaresolverr
+  ports:
+    - name: http
+      port: 8191
+      targetPort: http

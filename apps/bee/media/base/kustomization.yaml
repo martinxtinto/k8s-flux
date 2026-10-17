@@ -4,11 +4,7 @@ resources:
 - ./namespace.yaml
 - ./storage.yaml
 - ./jellyfin.yaml
-- ./sonarr.yaml
-- ./radarr.yaml
-- ./lidarr.yaml
-- ./prowlarr.yaml
-- ./bazarr.yaml
-- ./seerr.yaml
-- ./qbittorrent.yaml
+- ./arrmada.yaml
+- ./arrmada-qbittorrent.yaml
+- ./arrmada-flaresolverr.yaml
 - ./routes.yaml

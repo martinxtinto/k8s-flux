@@ -1,12 +1,41 @@
 ---
-# qBittorrent downloads into the shared media PVC so the *arr apps can hardlink completed files
-# into the library. There is no VPN and no inbound torrent Service: the web UI is reachable only
-# through the gateway, and the torrent port stays outbound-only until a router port forward is
-# added deliberately.
+# First-run qBittorrent settings. The subnet whitelist lets Arrmada connect over the cluster
+# pod network before it has a password; Arrmada then creates its own random login and turns the
+# whitelist back off. The save paths match ARRMADA_DOWNLOADS_DIR.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: arrmada-qbittorrent-seed
+  namespace: media
+data:
+  qBittorrent.conf: |
+    [Application]
+    FileLogger\Enabled=true
+
+    [BitTorrent]
+    Session\DefaultSavePath=/storage/downloads/complete
+    Session\TempPath=/storage/downloads/incomplete
+    Session\TempPathEnabled=true
+    Session\BTProtocol=TCP
+
+    [LegalNotice]
+    Accepted=true
+
+    [Preferences]
+    WebUI\Port=8080
+    WebUI\Address=*
+    WebUI\LocalHostAuth=true
+    WebUI\CSRFProtection=true
+    WebUI\HostHeaderValidation=false
+    WebUI\AuthSubnetWhitelistEnabled=true
+    WebUI\AuthSubnetWhitelist=10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+---
+# qBittorrent companion managed by Arrmada. It is internal-only: no HTTPRoute, no torrent
+# Service, no inbound port. Arrmada reaches it at http://arrmada-qbittorrent:8080.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: qbittorrent
+  name: arrmada-qbittorrent
   namespace: media
 spec:
   replicas: 1
@@ -14,11 +43,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: qbittorrent
+      app.kubernetes.io/name: arrmada-qbittorrent
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: qbittorrent
+        app.kubernetes.io/name: arrmada-qbittorrent
         app.kubernetes.io/part-of: media
     spec:
       securityContext:
@@ -31,7 +60,12 @@ spec:
           command:
             - sh
             - -ec
-            - chown 1000:1000 /config
+            - |
+              mkdir -p /config/qBittorrent
+              if [ ! -f /config/qBittorrent/qBittorrent.conf ]; then
+                cp /seed/qBittorrent.conf /config/qBittorrent/qBittorrent.conf
+              fi
+              chown 1000:1000 /config /config/qBittorrent /config/qBittorrent/qBittorrent.conf
           securityContext:
             runAsUser: 0
             runAsGroup: 0
@@ -52,15 +86,18 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
+            - name: seed
+              mountPath: /seed
+              readOnly: true
         - name: init-media
           image: busybox:1.37
           command:
             - sh
             - -ec
             - |
-              mkdir -p /data/media/movies /data/media/tv /data/media/music /data/downloads/complete /data/downloads/incomplete
-              chown 1000:1000 /data /data/media /data/media/movies /data/media/tv /data/media/music /data/downloads /data/downloads/complete /data/downloads/incomplete
-              chmod 775 /data /data/media /data/media/movies /data/media/tv /data/media/music /data/downloads /data/downloads/complete /data/downloads/incomplete
+              mkdir -p /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads/complete /storage/downloads/incomplete
+              chown 1000:1000 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
+              chmod 775 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
           securityContext:
             runAsUser: 0
             runAsGroup: 0
@@ -79,11 +116,11 @@ spec:
             limits:
               memory: 32Mi
           volumeMounts:
-            - name: media
-              mountPath: /data
+            - name: storage
+              mountPath: /storage
       containers:
         - name: qbittorrent
-          image: lscr.io/linuxserver/qbittorrent:5.2.4_v2.0.15-ls480
+          image: lscr.io/linuxserver/qbittorrent:5.2.3
           ports:
             - name: http
               containerPort: 8080
@@ -94,8 +131,6 @@ spec:
               value: "1000"
             - name: TZ
               value: America/Argentina/Buenos_Aires
-            - name: UMASK
-              value: "022"
             - name: WEBUI_PORT
               value: "8080"
             - name: TORRENTING_PORT
@@ -138,25 +173,28 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
-            - name: media
-              mountPath: /data
+            - name: storage
+              mountPath: /storage
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: qbittorrent-config
-        - name: media
+            claimName: arrmada-qbittorrent-config
+        - name: seed
+          configMap:
+            name: arrmada-qbittorrent-seed
+        - name: storage
           persistentVolumeClaim:
             claimName: media-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: qbittorrent
+  name: arrmada-qbittorrent
   namespace: media
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: qbittorrent
+    app.kubernetes.io/name: arrmada-qbittorrent
   ports:
     - name: http
       port: 8080

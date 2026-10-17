@@ -1,6 +1,5 @@
 ---
-# All media UIs share the wildcard certificate on the `xtinto.com-https` listener. Each app keeps
-# its own built-in authentication; there is no gateway-level auth layer.
+# Jellyfin remains the media server; Arrmada is the library manager and request portal.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -21,7 +20,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: sonarr
+  name: arrmada
   namespace: media
 spec:
   parentRefs:
@@ -29,110 +28,22 @@ spec:
       namespace: gateways
       sectionName: xtinto.com-https
   hostnames:
-    - sonarr.xtinto.com
+    - arrmada.xtinto.com
   rules:
     - backendRefs:
-        - name: sonarr
-          port: 8989
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: radarr
-  namespace: media
-spec:
-  parentRefs:
-    - name: bee-gateway
-      namespace: gateways
-      sectionName: xtinto.com-https
-  hostnames:
-    - radarr.xtinto.com
-  rules:
-    - backendRefs:
-        - name: radarr
+        - name: arrmada
           port: 7878
 ---
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+# Arrmada restores database backups by upload; the gateway default body limit is too small.
+apiVersion: gateway.nginx.org/v1alpha1
+kind: ClientSettingsPolicy
 metadata:
-  name: lidarr
+  name: arrmada
   namespace: media
 spec:
-  parentRefs:
-    - name: bee-gateway
-      namespace: gateways
-      sectionName: xtinto.com-https
-  hostnames:
-    - lidarr.xtinto.com
-  rules:
-    - backendRefs:
-        - name: lidarr
-          port: 8686
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: prowlarr
-  namespace: media
-spec:
-  parentRefs:
-    - name: bee-gateway
-      namespace: gateways
-      sectionName: xtinto.com-https
-  hostnames:
-    - prowlarr.xtinto.com
-  rules:
-    - backendRefs:
-        - name: prowlarr
-          port: 9696
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: bazarr
-  namespace: media
-spec:
-  parentRefs:
-    - name: bee-gateway
-      namespace: gateways
-      sectionName: xtinto.com-https
-  hostnames:
-    - bazarr.xtinto.com
-  rules:
-    - backendRefs:
-        - name: bazarr
-          port: 6767
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: qbittorrent
-  namespace: media
-spec:
-  parentRefs:
-    - name: bee-gateway
-      namespace: gateways
-      sectionName: xtinto.com-https
-  hostnames:
-    - qbittorrent.xtinto.com
-  rules:
-    - backendRefs:
-        - name: qbittorrent
-          port: 8080
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: seerr
-  namespace: media
-spec:
-  parentRefs:
-    - name: bee-gateway
-      namespace: gateways
-      sectionName: xtinto.com-https
-  hostnames:
-    - seerr.xtinto.com
-  rules:
-    - backendRefs:
-        - name: seerr
-          port: 5055
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: arrmada
+  body:
+    maxSize: "0"
