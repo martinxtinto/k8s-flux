@@ -25,6 +25,9 @@ spec:
         app.kubernetes.io/name: arrmada
         app.kubernetes.io/part-of: media
     spec:
+      # Kubernetes would inject ARRMADA_PORT=tcp://<service>:7878 and similar *_PORT variables
+      # from the Services in this namespace; Arrmada's config parser expects plain integer ports.
+      enableServiceLinks: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault

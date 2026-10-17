@@ -50,6 +50,8 @@ spec:
         app.kubernetes.io/name: arrmada-qbittorrent
         app.kubernetes.io/part-of: media
     spec:
+      # Keep Kubernetes Service link variables out of the container's environment.
+      enableServiceLinks: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault
