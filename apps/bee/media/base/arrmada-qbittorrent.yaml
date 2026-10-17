@@ -97,9 +97,9 @@ spec:
             - sh
             - -ec
             - |
-              mkdir -p /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads/complete /storage/downloads/incomplete
-              chown 1000:1000 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
-              chmod 775 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
+              mkdir -p /storage/media/movies /storage/media/tv /storage/media/music /storage/media/ebooks /storage/media/audiobooks /storage/downloads/complete /storage/downloads/incomplete
+              chown 1000:1000 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/media/ebooks /storage/media/audiobooks /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
+              chmod 775 /storage /storage/media /storage/media/movies /storage/media/tv /storage/media/music /storage/media/ebooks /storage/media/audiobooks /storage/downloads /storage/downloads/complete /storage/downloads/incomplete
           securityContext:
             runAsUser: 0
             runAsGroup: 0
