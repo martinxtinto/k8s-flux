@@ -1,0 +1,205 @@
+---
+# Jellyfin, the user-facing media server. The library is shared read-only from the media PVC;
+# metadata and library configuration live on the replicated config PVC. Cache and transcodes are
+# disposable, so they stay on emptyDir instead of consuming replicated storage. The Intel GPU
+# device plugin injects /dev/dri for QuickSync/VAAPI transcoding.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: media
+spec:
+  replicas: 1
+  # The config PVC is ReadWriteOnce; Recreate tears the old pod down before starting the new one so
+  # a rollout can never deadlock on Multi-Attach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jellyfin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jellyfin
+        app.kubernetes.io/part-of: media
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - chown 1000:1000 /config
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+        # Create the shared layout once. Only the directory metadata is chowned, not the media
+        # files, so this stays cheap even after the library grows.
+        - name: init-media
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /data/media/movies /data/media/tv /data/media/music /data/downloads/complete /data/downloads/incomplete
+              chown 1000:1000 /data /data/media /data/media/movies /data/media/tv /data/media/music /data/downloads /data/downloads/complete /data/downloads/incomplete
+              chmod 775 /data /data/media /data/media/movies /data/media/tv /data/media/music /data/downloads /data/downloads/complete /data/downloads/incomplete
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: media
+              mountPath: /data
+        - name: init-cache
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - mkdir -p /cache /transcodes && chown 1000:1000 /cache /transcodes
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: transcodes
+              mountPath: /transcodes
+      containers:
+        - name: jellyfin
+          image: lscr.io/linuxserver/jellyfin:12.2ubu2604-ls54
+          ports:
+            - name: http
+              containerPort: 8096
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+            # Emitted to Jellyfin clients and used to build redirect URLs behind the gateway.
+            - name: JELLYFIN_PublishedServerUrl
+              value: https://jellyfin.xtinto.com
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            # The LinuxServer image boots s6-overlay as root and drops to PUID/PGID for Jellyfin.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - SETUID
+                - SETGID
+                - KILL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+              gpu.intel.com/i915: 1
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: media
+              mountPath: /data
+              readOnly: true
+            - name: cache
+              mountPath: /cache
+            - name: transcodes
+              mountPath: /transcodes
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: media
+          persistentVolumeClaim:
+            claimName: media-data
+        - name: cache
+          emptyDir: {}
+        - name: transcodes
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: media
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: jellyfin
+  ports:
+    - name: http
+      port: 8096
+      targetPort: http

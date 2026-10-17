@@ -68,6 +68,9 @@ flowchart TD
   external-secrets-store --> immich
   linstor-cluster --> immich
   intel-device-plugins-gpu --> immich
+  gateways --> media
+  linstor-cluster --> media
+  intel-device-plugins-gpu --> media
   kubevirt --> vms
   linstor-cluster --> vms
   prometheus-operator --> node-exporter
@@ -134,6 +137,15 @@ flowchart TD
   v2.7.5 instance by restoring its database dump and library files into the `immich-library` PVC;
   chart and images are pinned at v2.7.5 until the restore is verified, then bumped to v3.3.1.
   Kanidm OIDC.
+- `media` — Jellyfin and the *arr stack: `jellyfin.xtinto.com`, `sonarr.xtinto.com`,
+  `radarr.xtinto.com`, `lidarr.xtinto.com`, `prowlarr.xtinto.com`, `bazarr.xtinto.com`,
+  `qbittorrent.xtinto.com`, `seerr.xtinto.com`; depends on `gateways`, `linstor-cluster`,
+  `intel-device-plugins-gpu`. One shared 250Gi `ReadWriteMany` LINSTOR/NFS volume holds
+  `/data/media` and `/data/downloads`, so the *arr apps hardlink imports and every workload can run
+  on either node. Each app keeps its configuration on a small `replicated` RWO PVC. Jellyfin uses
+  the Intel GPU for QuickSync/VAAPI transcoding. Authentication is each app's built-in login;
+  qBittorrent is outbound-only (no VPN, no inbound torrent port). The first qBittorrent password is
+  printed to the pod log and must be changed in the UI.
 
 ### VMs
 
