@@ -1,0 +1,19 @@
+---
+# The wildcard certificate on the `xtinto.com-https` listener covers rss.xtinto.com. OIDC is the
+# only authentication layer, so there is no gateway-level auth.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: freshrss
+  namespace: freshrss
+spec:
+  parentRefs:
+    - name: bee-gateway
+      namespace: gateways
+      sectionName: xtinto.com-https
+  hostnames:
+    - rss.xtinto.com
+  rules:
+    - backendRefs:
+        - name: freshrss
+          port: 80

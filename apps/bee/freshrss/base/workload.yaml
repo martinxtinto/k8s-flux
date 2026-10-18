@@ -1,0 +1,146 @@
+---
+# FreshRSS on rss.xtinto.com. SQLite and the user data live on the `freshrss-data` PVC. The official
+# Debian image is required for OIDC: mod_auth_openidc ships only in that variant, not in Alpine.
+# Apache protects /i/ and FreshRSS runs with `auth_type: http_auth`, so the Kanidm
+# `preferred_username` claim becomes the FreshRSS user; there is no form login. `freshrss-admin` is
+# the `default_user` and therefore the implicit admin; other Kanidm users auto-register normally.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: freshrss
+  namespace: freshrss
+spec:
+  replicas: 1
+  # The data PVC is ReadWriteOnce; Recreate tears the old pod down before starting the new one so a
+  # rollout can never deadlock on Multi-Attach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: freshrss
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: freshrss
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: freshrss
+          image: freshrss/freshrss:1.30.1
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+            # Built-in cron refreshes feeds twice per hour; the entrypoint rewrites the crontab.
+            - name: CRON_MIN
+              value: "7,37"
+            # Apache starts as root only long enough to bind and drop to www-data; listening on 8080
+            # avoids needing NET_BIND_SERVICE.
+            - name: LISTEN
+              value: 0.0.0.0:8080
+            - name: OIDC_ENABLED
+              value: "1"
+            - name: OIDC_PROVIDER_METADATA_URL
+              value: https://idm.xtinto.com/oauth2/openid/freshrss/.well-known/openid-configuration
+            - name: OIDC_CLIENT_ID
+              value: freshrss
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: freshrss-oidc
+                  key: OIDC_CLIENT_SECRET
+            - name: OIDC_CLIENT_CRYPTO_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: freshrss-oidc
+                  key: OIDC_CLIENT_CRYPTO_KEY
+            - name: OIDC_REMOTE_USER_CLAIM
+              value: preferred_username
+            - name: OIDC_SCOPES
+              value: openid profile email
+            # The gateway terminates TLS, so mod_auth_openidc must build the redirect URI from the
+            # forwarded headers; otherwise it advertises an http:// callback and Kanidm rejects it.
+            - name: OIDC_X_FORWARDED_HEADERS
+              value: X-Forwarded-Host X-Forwarded-Port X-Forwarded-Proto
+            # Trust the gateway for client-IP logging and X-Forwarded-* handling.
+            - name: TRUSTED_PROXY
+              value: 10.244.0.0/16 10.96.0.0/12
+            # First boot only: installs FreshRSS with HTTP auth and creates the admin user. Kanidm's
+            # `prefer-short-username` makes the claim `freshrss-admin`. Ignored after the first run.
+            - name: FRESHRSS_INSTALL
+              value: |-
+                --default-user freshrss-admin
+                --auth-type http_auth
+                --base-url https://rss.xtinto.com
+                --language en
+                --title FreshRSS
+            - name: FRESHRSS_USER
+              value: |-
+                --user freshrss-admin
+                --language en
+          # /i/ is OIDC-protected, so unauthenticated probes get a 302 to Kanidm, which the kubelet
+          # counts as success; a broken OIDC setup returns 5xx and fails the probe.
+          startupProbe:
+            httpGet:
+              path: /i/
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /i/
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /i/
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            # The image's entrypoint rewrites /etc/apache2 and /etc/php and then Apache drops to
+            # www-data, so the container starts as root but keeps only the capabilities it needs.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - SETGID
+                - SETUID
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/www/FreshRSS/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: freshrss-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: freshrss
+  namespace: freshrss
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: freshrss
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

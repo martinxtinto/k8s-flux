@@ -53,6 +53,9 @@ flowchart TD
   linstor-cluster --> degoog
   gateways --> kanidm
   linstor-cluster --> kanidm
+  gateways --> freshrss
+  external-secrets-store --> freshrss
+  linstor-cluster --> freshrss
   gateways --> openwebui
   external-secrets-store --> openwebui
   linstor-cluster --> openwebui
@@ -110,6 +113,13 @@ flowchart TD
 
 - `degoog` — `search.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
 - `kanidm` — `idm.xtinto.com`; depends on `gateways`, `linstor-cluster`.
+- `freshrss` — `rss.xtinto.com`; depends on `gateways`, `external-secrets-store`,
+  `linstor-cluster`. Official Debian image (OIDC needs `mod_auth_openidc`, which the Alpine variant
+  lacks), SQLite on a `replicated` PVC, Kanidm OIDC with `auth_type: http_auth`: no local passwords.
+  The Kanidm OAuth2 client `freshrss` exists with PKCE disabled (the image's Apache module does not
+  implement PKCE); its secret and the session crypto key are stored manually in Bitwarden as
+  `freshrss/oidc-client-secret` and `freshrss/oidc-crypto-key`. `freshrss-admin` is the default
+  (admin) user; `martin.tome` is a normal user.
 - `openwebui` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
   Official Helm chart, SQLite on a `replicated` PVC, Kanidm OIDC. LLM connections are added later in
   the admin panel.

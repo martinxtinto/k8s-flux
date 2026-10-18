@@ -1,0 +1,15 @@
+---
+# FreshRSS keeps its SQLite database, user configuration and cache under /var/www/FreshRSS/data, so
+# one LINSTOR-replicated volume is enough. The Deployment uses Recreate, so ReadWriteOnce is fine.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: freshrss-data
+  namespace: freshrss
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 5Gi
