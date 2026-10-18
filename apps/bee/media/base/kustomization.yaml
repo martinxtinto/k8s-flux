@@ -7,4 +7,5 @@ resources:
 - ./arrmada.yaml
 - ./arrmada-qbittorrent.yaml
 - ./arrmada-flaresolverr.yaml
+- ./arrmada-prowlarr.yaml
 - ./routes.yaml

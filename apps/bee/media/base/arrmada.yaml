@@ -1,7 +1,8 @@
 ---
-# Arrmada replaces the individual Sonarr/Radarr/Lidarr/Prowlarr/Bazarr/Seerr apps: one process
-# manages the libraries, indexers, requests and subtitles. qBittorrent and FlareSolverr stay
-# separate Deployments, matching Arrmada's Compose bundle and keeping their state isolated.
+# Arrmada replaces the individual Sonarr/Radarr/Lidarr/Bazarr/Seerr apps: one process manages
+# the libraries, requests and subtitles. qBittorrent, FlareSolverr and Prowlarr stay separate
+# Deployments, matching Arrmada's Compose bundle and keeping their state isolated. Arrmada
+# registers Prowlarr as its indexer manager and auto-adds qBittorrent/FlareSolverr on first start.
 #
 # /data holds Arrmada's database, backups and settings; Convert scratch uses an emptyDir at
 # /transcode. /storage is the shared media PVC. Both Arrmada and qBittorrent mount /storage at
@@ -62,8 +63,9 @@ spec:
           volumeMounts:
             - name: storage
               mountPath: /storage
-        # Arrmada auto-registers qBittorrent and FlareSolverr on first start; wait until both
-        # Services have ready endpoints so that registration does not race their startup.
+        # Arrmada auto-registers qBittorrent and FlareSolverr on first start and uses Prowlarr as
+        # its indexer manager; wait until the Services have ready endpoints so registration does
+        # not race their startup.
         - name: wait-for-deps
           image: busybox:1.37
           command:
@@ -72,6 +74,7 @@ spec:
             - |
               until nc -z arrmada-qbittorrent 8080; do sleep 2; done
               until nc -z arrmada-flaresolverr 8191; do sleep 2; done
+              until nc -z arrmada-prowlarr 9696; do sleep 2; done
           securityContext:
             runAsNonRoot: true
             runAsUser: 65534
@@ -106,6 +109,8 @@ spec:
               value: http://arrmada-qbittorrent:8080
             - name: ARRMADA_FLARESOLVERR_URL
               value: http://arrmada-flaresolverr:8191
+            - name: ARRMADA_PROWLARR_URL
+              value: http://arrmada-prowlarr:9696
             - name: ARRMADA_QBIT_PORT
               value: "6881"
             # Starting values for the browser setup. The folders chosen in the app win.

@@ -1,0 +1,132 @@
+---
+# Prowlarr companion managed by Arrmada. Optional: Arrmada talks to it over the cluster pod
+# network at http://arrmada-prowlarr:9696, matching Arrmada's Compose bundle. Internal-only:
+# no torrent Service and no inbound port. The HTTPRoute exposes only its own web UI.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arrmada-prowlarr
+  namespace: media
+spec:
+  replicas: 1
+  # The config PVC is ReadWriteOnce; Recreate avoids a Multi-Attach deadlock on rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arrmada-prowlarr
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arrmada-prowlarr
+        app.kubernetes.io/part-of: media
+    spec:
+      # Kubernetes would inject ARRMADA_PORT=tcp://<service>:7878 and similar *_PORT variables
+      # from the Services in this namespace; keep Service link variables out of the environment.
+      enableServiceLinks: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        - name: init-config
+          image: busybox:1.37
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /config
+              chown 1000:1000 /config
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      containers:
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:2.3.0
+          ports:
+            - name: http
+              containerPort: 9696
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            # The entrypoint starts as root, fixes ownership, then drops to PUID/PGID with gosu.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - SETUID
+                - SETGID
+                - KILL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: arrmada-prowlarr-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arrmada-prowlarr
+  namespace: media
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: arrmada-prowlarr
+  ports:
+    - name: http
+      port: 9696
+      targetPort: http

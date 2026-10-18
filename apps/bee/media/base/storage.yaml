@@ -57,3 +57,17 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+# Prowlarr settings, indexer definitions and credentials.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arrmada-prowlarr-config
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 2Gi
