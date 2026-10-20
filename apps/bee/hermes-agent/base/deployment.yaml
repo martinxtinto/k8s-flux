@@ -78,6 +78,12 @@ spec:
           env:
             - name: HERMES_DASHBOARD
               value: "1"
+            # Root URL the dashboard is reached at. Env wins over config.yaml, so this overrides a
+            # stale public_url seeded on first boot (the init container never re-seeds an existing
+            # /opt/data/config.yaml). The app then builds its OAuth callback as
+            # https://hermes.xtinto.com/auth/callback, matching the Kanidm client.
+            - name: HERMES_DASHBOARD_PUBLIC_URL
+              value: https://hermes.xtinto.com
             - name: API_SERVER_ENABLED
               value: "true"
             - name: API_SERVER_HOST
