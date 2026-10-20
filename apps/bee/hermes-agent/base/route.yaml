@@ -1,10 +1,10 @@
 ---
-# hermes.xtinto.com, behind the shared bee-gateway. Each backend gets its own top-level prefix:
-#   - /api/v1/*     -> the OpenAI-compatible API server, rewritten to /v1/* upstream
-#   - /dashboard/*  -> the web dashboard UI and its own management API
-#   - everything else -> a redirect to /dashboard/
+# hermes.xtinto.com, behind the shared bee-gateway. Two backends share the hostname:
+#   - /api/v1/*  -> the OpenAI-compatible API server, rewritten to /v1/* upstream
+#   - everything else -> the web dashboard UI and its own management API, at the site root
 # The OpenAI-compatible API server's native /api/* management endpoints are intentionally NOT
-# exposed; only /v1/* is reachable, which also keeps them clear of the dashboard's /api/* routes.
+# exposed; only /v1/* is reachable. The dashboard is served at the origin root because its SPA
+# build emits root-absolute asset and login URLs, which cannot survive a prefixed mount.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -32,53 +32,11 @@ spec:
       backendRefs:
         - name: hermes-agent
           port: 8642
-    # Exact bare prefix: rewrite to the dashboard root and tell the SPA (via X-Forwarded-Prefix)
-    # that it is served under /dashboard so it builds its own /api/* URLs correctly.
-    - matches:
-        - path:
-            type: Exact
-            value: /dashboard
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplaceFullPath
-              replaceFullPath: /
-        - type: RequestHeaderModifier
-          requestHeaderModifier:
-            set:
-              - name: X-Forwarded-Prefix
-                value: /dashboard
-      backendRefs:
-        - name: hermes-agent
-          port: 9119
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /dashboard/
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
-        - type: RequestHeaderModifier
-          requestHeaderModifier:
-            set:
-              - name: X-Forwarded-Prefix
-                value: /dashboard
-      backendRefs:
-        - name: hermes-agent
-          port: 9119
-    # Least specific match, so it only catches paths not handled above.
+    # Everything else: the web dashboard, served at the origin root (no prefix rewrite).
     - matches:
         - path:
             type: PathPrefix
             value: /
-      filters:
-        - type: RequestRedirect
-          requestRedirect:
-            path:
-              type: ReplaceFullPath
-              replaceFullPath: /dashboard/
-            statusCode: 302
+      backendRefs:
+        - name: hermes-agent
+          port: 9119

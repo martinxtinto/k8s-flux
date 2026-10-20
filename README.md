@@ -132,7 +132,7 @@ flowchart TD
   from the old instance via the web vault's export/import.
 - `hermes-agent` — `hermes.xtinto.com`; depends on `gateways`, `linstor-cluster`. Nous Research's
   self-improving agent, run in gateway mode from the official `nousresearch/hermes-agent` image (no
-  Helm chart). The dashboard UI/management API is served under `/dashboard` (Kanidm OIDC) and the
+  Helm chart). The dashboard UI/management API (Kanidm OIDC) is served at the site root and the
   OpenAI-compatible API under `/api/v1`; all state lives on a `replicated` PVC. NetworkPolicies
   default-deny both directions (cluster CIDRs are Flux `postBuild` variables) so the agent can only
   reach DNS, the internet and the gateway VIP (Kanidm), never other pods or the Kubernetes API. The

@@ -17,9 +17,9 @@ metadata:
 data:
   config.yaml: |
     dashboard:
-      # The dashboard is served under /dashboard; public_url is used verbatim to build the OAuth
-      # callback: https://hermes.xtinto.com/dashboard/auth/callback.
-      public_url: https://hermes.xtinto.com/dashboard
+      # The dashboard is served at the site root; public_url is used verbatim to build the OAuth
+      # callback: https://hermes.xtinto.com/auth/callback.
+      public_url: https://hermes.xtinto.com
       # Trust forwarding headers only from the cluster pod network. This lets the NGINX Gateway
       # Fabric data-plane pods' X-Forwarded-Proto drive secure cookies while ignoring headers from
       # any other peer. Hermes refuses unbounded values like 0.0.0.0/0.

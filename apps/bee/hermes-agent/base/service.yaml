@@ -1,6 +1,6 @@
 ---
 # Both surfaces of the pod. The HTTPRoute (route.yaml) sends /api/v1 to the API server and
-# /dashboard to the web dashboard; the NetworkPolicy (netpol.yaml) only admits the gateway's
+# everything else to the web dashboard; the NetworkPolicy (netpol.yaml) only admits the gateway's
 # data-plane pods.
 apiVersion: v1
 kind: Service
