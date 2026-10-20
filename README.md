@@ -21,7 +21,6 @@ per unit; `dependsOn` (with `wait: true`) is the dependency graph.
 ## Clusters
 
 - **bee** — active cluster.
-- **oldbee** — archived, no longer reconciled; kept for reference.
 
 ## bee
 

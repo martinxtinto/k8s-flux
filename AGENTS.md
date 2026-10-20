@@ -37,8 +37,6 @@ There is no test suite. Validate YAML/kustomize rendering before committing:
 - The `KubeVirt` CR has no `Ready` condition (only `Available`/`Progressing`/`Degraded`), so
   the `kubevirt` Kustomization uses a CEL `healthCheckExprs` on `Available` rather than
   relying on the default `wait` health check.
-- `oldbee` is archived and no longer reconciled (`clusters/oldbee/dev` has no config).
-  Leave it alone except to recover manifests.
 - Add a ServiceMonitor/PodMonitor next to the workload to be scraped — Prometheus uses
   empty selectors, so no labels are required.
 
