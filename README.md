@@ -55,6 +55,9 @@ flowchart TD
   gateways --> freshrss
   external-secrets-store --> freshrss
   linstor-cluster --> freshrss
+  gateways --> gotify
+  external-secrets-store --> gotify
+  linstor-cluster --> gotify
   gateways --> openwebui
   external-secrets-store --> openwebui
   linstor-cluster --> openwebui
@@ -119,6 +122,13 @@ flowchart TD
   implement PKCE); its secret and the session crypto key are stored manually in Bitwarden as
   `freshrss/oidc-client-secret` and `freshrss/oidc-crypto-key`. `freshrss-admin` is the default
   (admin) user; `martin.tome` is a normal user.
+- `gotify` — `push.xtinto.com`; depends on `gateways`, `external-secrets-store`,
+  `linstor-cluster`. Raw manifests, SQLite on a `replicated` PVC. Kanidm OIDC is available for
+  members of the `gotify_users` group; local password login stays enabled for the `admin` account.
+  The bootstrap admin password is generated once and stored in Bitwarden as
+  `gotify/DEFAULTUSER_PASS`; the OAuth2 client secret is stored as `gotify/oidc-client-secret`.
+  The Kanidm OAuth2 client `gotify` uses PKCE and has only the `gotify_users` group in its scope
+  map; create it manually. Alertmanager delivery is not configured yet.
 - `openwebui` — `chat.xtinto.com`; depends on `gateways`, `external-secrets-store`, `linstor-cluster`.
   Official Helm chart, SQLite on a `replicated` PVC, Kanidm OIDC. LLM connections are added later in
   the admin panel.

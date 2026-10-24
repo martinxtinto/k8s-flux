@@ -1,0 +1,15 @@
+---
+# Gotify keeps its SQLite database, uploaded images and plugins under /app/data. A single
+# LINSTOR-replicated volume is enough; the Deployment uses Recreate so ReadWriteOnce is fine.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gotify-data
+  namespace: gotify
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: replicated
+  resources:
+    requests:
+      storage: 2Gi
