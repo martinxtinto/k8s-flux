@@ -175,10 +175,12 @@ flowchart TD
   because SFTPGo 2.7 does not send it). SFTP logins use Kanidm over in-cluster LDAPS through
   `sftpgo-plugin-auth`: members of the Kanidm group `sftpgo_users` with a POSIX password can log in,
   and are created in SFTPGo on first login (only then does their WebClient OIDC login work). The
-  directory search is anonymous: a Kanidm service-account token bind sees only the service account
-  itself. TLS verification is skipped because Kanidm's certificate covers only `idm.xtinto.com`. The
-  admin `martin.tome` is created on first boot with a generated break-glass password
-  (`sftpgo/admin-password`). `sftpgo/oidc-client-secret` is created manually in Bitwarden.
+  directory search binds with a read-only API token of the Kanidm service account `sftpgo_ldap`,
+  which must be a member of the read permission groups `idm_people_pii_read` and `idm_group_admins`
+  (read-only token, so it cannot write). TLS verification is skipped because Kanidm's certificate
+  covers only `idm.xtinto.com`. The admin `martin.tome` is created on first boot with a generated
+  break-glass password (`sftpgo/admin-password`). `sftpgo/oidc-client-secret` and
+  `sftpgo/ldap-api-token` are created manually in Bitwarden.
 
 ### VMs
 

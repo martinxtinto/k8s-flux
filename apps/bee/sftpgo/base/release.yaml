@@ -163,9 +163,16 @@ spec:
         value: "1"
       - name: SFTPGO_PLUGIN_AUTH_LDAP_BASE_DN
         value: dc=idm,dc=xtinto,dc=com
-      # No bind DN/password: the search runs anonymously. A Kanidm service-account API-token bind only
-      # sees the service account itself, while anonymous can read persons' name, class and memberof.
-      # The user's own bind (with their POSIX password) is what authenticates them.
+      # Kanidm API-token bind (`dn=token` + token as password). Kanidm rejects empty-password binds, so
+      # an anonymous search is not an option, and a token bind sees only the service account itself
+      # unless the account is in Kanidm's read permission groups (see README).
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_BIND_DN
+        value: dn=token
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: sftpgo-kanidm
+            key: LDAP_API_TOKEN
       # Only POSIX-enabled members of the Kanidm group `sftpgo_users` are found.
       - name: SFTPGO_PLUGIN_AUTH_LDAP_SEARCH_QUERY
         value: (&(class=posixaccount)(name=%username%)(memberof=sftpgo_users@idm.xtinto.com))
