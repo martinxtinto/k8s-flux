@@ -168,6 +168,16 @@ flowchart TD
   settings on a 2Gi one; Jellyfin keeps metadata on a 10Gi PVC. Jellyfin uses the Intel GPU for
   QuickSync/VAAPI transcoding, and Arrmada can use it for Convert and AI subtitles. Jellyfin and
   Arrmada each use their own login; the qBittorrent password is shown inside Arrmada.
+- `sftpgo` — `sftp.xtinto.com` (WebAdmin/WebClient) and SFTP on `192.168.10.10:2022`; depends on
+  `gateways`, `external-secrets-store`, `linstor-cluster`. Official OCI Helm chart with the
+  `-plugins` image variant; SQLite, SSH host keys and user homes on a 20Gi `replicated` PVC. Web
+  logins use Kanidm OIDC with implicit roles (the Kanidm OAuth2 client `sftpgo` has PKCE disabled,
+  because SFTPGo 2.7 does not send it). SFTP logins use Kanidm over in-cluster LDAPS through
+  `sftpgo-plugin-auth`: any Kanidm person with a POSIX password can log in, and is created in
+  SFTPGo on first login. TLS verification is skipped because Kanidm's certificate covers only
+  `idm.xtinto.com`. The admin `martin.tome` is created on first boot with a generated break-glass
+  password (`sftpgo/admin-password`). `sftpgo/oidc-client-secret` and `sftpgo/ldap-api-token` (the
+  API token of the Kanidm service account `sftpgo_ldap`) are created manually in Bitwarden.
 
 ### VMs
 

@@ -1,0 +1,202 @@
+---
+# Official SFTPGo chart, published as an OCI artifact on ghcr.io.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: sftpgo
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: oci://ghcr.io/sftpgo/helm-charts/sftpgo
+  layerSelector:
+    mediaType: "application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+    operation: copy
+  ref:
+    tag: "0.48.0"
+---
+# SFTPGo on sftp.xtinto.com (WebAdmin/WebClient through bee-gateway) and 192.168.10.10:2022 (SFTP,
+# see lan-service.yaml). SQLite, SSH host keys and user homes all live on one LINSTOR-replicated PVC
+# mounted at /var/lib/sftpgo.
+#
+# Authentication:
+#   - WebAdmin/WebClient: Kanidm OIDC with implicit roles; the login link used (admin or client)
+#     decides the role, and the mapped SFTPGo admin/user must already exist.
+#   - SFTP: Kanidm over in-cluster LDAPS via sftpgo-plugin-auth. Users bind with their Kanidm POSIX
+#     password and are created in SFTPGo on first login, so they can then also use the WebClient.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sftpgo
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: sftpgo
+  # Pinned so the pod's `app.kubernetes.io/instance` label is `sftpgo`, which lan-service.yaml selects
+  # on (Flux would otherwise default to `<targetNamespace>-<name>`).
+  releaseName: sftpgo
+  chartRef:
+    kind: OCIRepository
+    name: sftpgo
+    namespace: flux-system
+  install:
+    createNamespace: true
+  values:
+    fullnameOverride: sftpgo
+
+    image:
+      # The `-plugins` variant bundles the official plugins (including sftpgo-plugin-auth for LDAP)
+      # in /usr/local/bin, built for the same release.
+      tag: v2.7.5-plugins
+
+    replicaCount: 1
+    # The data PVC is ReadWriteOnce; Recreate tears the old pod down before starting the new one so a
+    # rollout can never deadlock on Multi-Attach.
+    deploymentStrategy:
+      type: Recreate
+
+    sftpd:
+      enabled: true
+      port: 2022
+    httpd:
+      enabled: true
+      port: 8080
+
+    service:
+      type: ClusterIP
+      ports:
+        sftp:
+          port: 2022
+        http:
+          port: 80
+
+    persistence:
+      enabled: true
+      pvc:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: replicated
+        resources:
+          requests:
+            storage: 20Gi
+
+    # The image runs as uid/gid 1000.
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    # SFTPGo does not talk to the Kubernetes API.
+    serviceAccount:
+      automountServiceAccountToken: false
+
+    envVars:
+      - name: TZ
+        value: America/Argentina/Buenos_Aires
+
+      # Keep user homes on the data PVC instead of the image's /srv/sftpgo/data.
+      - name: SFTPGO_DATA_PROVIDER__USERS_BASE_DIR
+        value: /var/lib/sftpgo/users
+
+      # First boot only: create the admin record that Kanidm OIDC maps to (`preferred_username`).
+      # The password is a break-glass credential kept in Bitwarden (see secrets.yaml).
+      - name: SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN
+        value: "true"
+      - name: SFTPGO_DEFAULT_ADMIN_USERNAME
+        value: martin.tome
+      - name: SFTPGO_DEFAULT_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: sftpgo-admin-password
+            key: password
+
+      # Trust the gateway's X-Forwarded-For for client IPs (defender, logs).
+      - name: SFTPGO_HTTPD__BINDINGS__0__PROXY_ALLOWED
+        value: 10.244.0.0/16
+      - name: SFTPGO_HTTPD__BINDINGS__0__CLIENT_IP_PROXY_HEADER
+        value: X-Forwarded-For
+
+      # Kanidm OIDC. SFTPGo 2.7 does not send PKCE, so the Kanidm client has PKCE disabled.
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__CONFIG_URL
+        value: https://idm.xtinto.com/oauth2/openid/sftpgo
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__CLIENT_ID
+        value: sftpgo
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: sftpgo-kanidm
+            key: OIDC_CLIENT_SECRET
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__REDIRECT_BASE_URL
+        value: https://sftp.xtinto.com
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__USERNAME_FIELD
+        value: preferred_username
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__SCOPES
+        value: openid,profile,email
+      # The role follows the login link; access still requires a matching SFTPGo admin/user.
+      - name: SFTPGO_HTTPD__BINDINGS__0__OIDC__IMPLICIT_ROLES
+        value: "true"
+
+      # LDAP auth plugin (password + keyboard-interactive).
+      - name: SFTPGO_PLUGINS__0__TYPE
+        value: auth
+      - name: SFTPGO_PLUGINS__0__AUTH_OPTIONS__SCOPE
+        value: "5"
+      - name: SFTPGO_PLUGINS__0__CMD
+        value: /usr/local/bin/sftpgo-plugin-auth
+      - name: SFTPGO_PLUGINS__0__ARGS
+        value: serve
+      - name: SFTPGO_PLUGINS__0__AUTO_MTLS
+        value: "1"
+      # Kanidm's certificate is only valid for idm.xtinto.com, so verification is skipped for the
+      # in-cluster Service name. LDAPS never leaves the cluster network.
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_URL
+        value: ldaps://kanidm.kanidm.svc.cluster.local:3636
+      - name: SFTPGO_PLUGIN_AUTH_SKIP_TLS_VERIFY
+        value: "1"
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_BASE_DN
+        value: dc=idm,dc=xtinto,dc=com
+      # Kanidm API-token bind: `dn=token` plus the token as password.
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_BIND_DN
+        value: dn=token
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: sftpgo-kanidm
+            key: LDAP_API_TOKEN
+      # Only POSIX-enabled Kanidm persons can bind over LDAP.
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_SEARCH_QUERY
+        value: (&(class=posixaccount)(name=%username%))
+      - name: SFTPGO_PLUGIN_AUTH_LDAP_GROUP_ATTRIBUTES
+        value: memberof
+      - name: SFTPGO_PLUGIN_AUTH_USERS_BASE_DIR
+        value: /var/lib/sftpgo/users
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 512Mi
+
+    gatewayApi:
+      httpRoutes:
+        ui:
+          enabled: true
+          parentRefs:
+            - name: bee-gateway
+              namespace: gateways
+              sectionName: xtinto.com-https
+          hostnames:
+            - sftp.xtinto.com
+          pathPrefix: /
+
+    podMonitor:
+      enabled: true

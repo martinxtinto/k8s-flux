@@ -1,0 +1,21 @@
+---
+# SFTP on the LAN VIP. The chart's Services cannot set externalIPs, so this extra Service publishes
+# 192.168.10.10:2022 (the gateway VIP, on a different port) straight to the SFTPGo pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sftpgo-sftp-lan
+  namespace: sftpgo
+spec:
+  type: ClusterIP
+  externalIPs:
+    - 192.168.10.10
+  selector:
+    app.kubernetes.io/name: sftpgo
+    app.kubernetes.io/instance: sftpgo
+  ports:
+    - name: sftp
+      port: 2022
+      targetPort: sftp
+      protocol: TCP
+      appProtocol: sftp-ssh
