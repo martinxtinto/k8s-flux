@@ -173,11 +173,12 @@ flowchart TD
   `-plugins` image variant; SQLite, SSH host keys and user homes on a 20Gi `replicated` PVC. Web
   logins use Kanidm OIDC with implicit roles (the Kanidm OAuth2 client `sftpgo` has PKCE disabled,
   because SFTPGo 2.7 does not send it). SFTP logins use Kanidm over in-cluster LDAPS through
-  `sftpgo-plugin-auth`: any Kanidm person with a POSIX password can log in, and is created in
-  SFTPGo on first login. TLS verification is skipped because Kanidm's certificate covers only
-  `idm.xtinto.com`. The admin `martin.tome` is created on first boot with a generated break-glass
-  password (`sftpgo/admin-password`). `sftpgo/oidc-client-secret` and `sftpgo/ldap-api-token` (the
-  API token of the Kanidm service account `sftpgo_ldap`) are created manually in Bitwarden.
+  `sftpgo-plugin-auth`: members of the Kanidm group `sftpgo_users` with a POSIX password can log in,
+  and are created in SFTPGo on first login (only then does their WebClient OIDC login work). The
+  directory search is anonymous: a Kanidm service-account token bind sees only the service account
+  itself. TLS verification is skipped because Kanidm's certificate covers only `idm.xtinto.com`. The
+  admin `martin.tome` is created on first boot with a generated break-glass password
+  (`sftpgo/admin-password`). `sftpgo/oidc-client-secret` is created manually in Bitwarden.
 
 ### VMs
 
