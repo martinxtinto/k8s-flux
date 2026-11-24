@@ -6,6 +6,15 @@ spec:
   values:
     linstorSatelliteConfigurations:
       - name: replicated
+        # DRBD 9.3.4 leaves replicas stuck Inconsistent when many volumes resync at once ("Could not
+        # allocate resync request"); 9.3.5 fixes the resync memory and pacing issues. The Fedora nodes
+        # match none of the Operator's `match:` OS entries, so the fallback loader image is pinned here.
+        # The new module only loads on the next Satellite restart (node reboot), not on this apply.
+        podTemplate:
+          spec:
+            initContainers:
+              - name: drbd-module-loader
+                image: quay.io/piraeusdatastore/drbd9-resolute:v9.3.5
         storagePools:
           - name: pool-0
             lvmThinPool:
