@@ -77,7 +77,7 @@ spec:
         storageClassName: replicated
         resources:
           requests:
-            storage: 20Gi
+            storage: 100Gi
 
     # The image runs as uid/gid 1000.
     podSecurityContext:
