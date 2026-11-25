@@ -1,0 +1,74 @@
+---
+# Gotenberg converts Office documents (LibreOffice) and emails (Chromium) to PDF for Paperless. As in
+# the upstream Compose files, Chromium runs without JavaScript and may only load the local files it
+# is given, so tracking pixels and remote content in emails are never fetched.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paperless-gotenberg
+  namespace: paperless
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: paperless-gotenberg
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: paperless-gotenberg
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        # The image runs as the gotenberg user, uid/gid 1001.
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gotenberg
+          image: gotenberg/gotenberg:8.40
+          # `args` keeps the image's tini entrypoint.
+          args:
+            - gotenberg
+            - --chromium-disable-javascript=true
+            - --chromium-allow-list=^file:///tmp/.*
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paperless-gotenberg
+  namespace: paperless
+spec:
+  selector:
+    app.kubernetes.io/name: paperless-gotenberg
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

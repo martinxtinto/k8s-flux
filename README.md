@@ -76,6 +76,9 @@ flowchart TD
   gateways --> media
   linstor-cluster --> media
   intel-device-plugins-gpu --> media
+  gateways --> paperless
+  external-secrets-store --> paperless
+  linstor-cluster --> paperless
   kubevirt --> vms
   linstor-cluster --> vms
   prometheus-operator --> node-exporter
@@ -181,6 +184,20 @@ flowchart TD
   covers only `idm.xtinto.com`. The admin `martin.tome` is created on first boot with a generated
   break-glass password (`sftpgo/admin-password`). `sftpgo/oidc-client-secret` and
   `sftpgo/ldap-api-token` are created manually in Bitwarden.
+- `paperless` — `paperless.xtinto.com`; depends on `gateways`, `external-secrets-store`,
+  `linstor-cluster`. Raw manifests for Paperless-ngx 3 in rootless mode, with a bundled
+  PostgreSQL 18, Valkey 9 (Celery broker, no persistence), Tika and Gotenberg for Office documents
+  and emails. Data (2Gi), media (10Gi) and consume (5Gi) are separate `replicated` PVCs; OCR uses
+  the built-in `spa+eng` language data. The secret key and database password are generated once
+  and kept in Bitwarden (`paperless/PAPERLESS_SECRET_KEY`, `paperless/POSTGRES_PASSWORD`). Kanidm
+  OIDC is the only login: the regular login form is disabled, users are created on first login,
+  and members of the Kanidm group `paperless_admins` become superusers on every login (removed from
+  the group, they lose it). There is no local admin; recover a lockout with
+  `manage.py createsuperuser`. Manual setup: the Kanidm OAuth2 client `paperless` (PKCE and the
+  default ES256 signing, no legacy crypto) with redirect URL
+  `https://paperless.xtinto.com/accounts/oidc/kanidm/login/callback/` and a scope map of
+  `openid profile email groups_name` for the allowed users, the group `paperless_admins`, and its
+  secret in Bitwarden as `paperless/oidc-client-secret`.
 
 ### VMs
 
