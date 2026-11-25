@@ -63,6 +63,9 @@ spec:
     spec:
       # Paperless does not talk to the Kubernetes API.
       automountServiceAccountToken: false
+      # The `paperless` Service would inject PAPERLESS_PORT=tcp://<ip>:8000 (and other
+      # PAPERLESS_* docker-link variables), which Paperless reads as its own settings.
+      enableServiceLinks: false
       securityContext:
         # Rootless mode: the container starts directly as uid/gid 1000 (the image's paperless user)
         # without s6 privilege remapping, so USERMAP_UID/GID and PAPERLESS_OCR_LANGUAGES must not be
