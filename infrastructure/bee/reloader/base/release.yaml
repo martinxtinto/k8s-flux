@@ -1,0 +1,50 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: stakater
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://stakater.github.io/stakater-charts
+---
+# Reloader rolls workloads when a Secret or ConfigMap they reference changes. It only acts on
+# workloads that opt in with a `*.reloader.stakater.com/*` annotation, e.g. bitwarden-sdk-server,
+# which does not reload its cert-manager-renewed TLS certificate on its own.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: reloader
+  namespace: flux-system
+spec:
+  interval: 24h
+  targetNamespace: reloader
+  chart:
+    spec:
+      chart: reloader
+      version: 2.2.21
+      sourceRef:
+        kind: HelmRepository
+        name: stakater
+        namespace: flux-system
+      interval: 24h
+  values:
+    reloader:
+      # Roll pods by bumping a pod-template annotation instead of injecting an env var.
+      reloadStrategy: annotations
+      # Read-only root filesystem; the chart then mounts an emptyDir at /tmp.
+      readOnlyRootFileSystem: true
+      deployment:
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+      podMonitor:
+        enabled: true

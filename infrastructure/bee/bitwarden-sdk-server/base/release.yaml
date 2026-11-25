@@ -29,3 +29,8 @@ spec:
     image:
       tls:
         enabled: true
+    # The server reads its TLS certificate only at startup. cert-manager renews `bitwarden-tls-certs`
+    # (and the CA) every 60 days; Reloader then restarts the server so it serves the new
+    # certificate, which external-secrets verifies against the renewed `bitwarden-ca-certs`.
+    deploymentAnnotations:
+      secret.reloader.stakater.com/reload: bitwarden-tls-certs

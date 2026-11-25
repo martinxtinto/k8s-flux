@@ -84,6 +84,7 @@ flowchart TD
   prometheus-operator --> node-exporter
   prometheus-operator --> kube-state-metrics
   prometheus-operator --> alertmanager
+  prometheus-operator --> reloader
   node-exporter --> prometheus
   kube-state-metrics --> prometheus
   alertmanager --> prometheus
@@ -99,7 +100,11 @@ flowchart TD
 - `gateway-api-crds` — upstream Gateway API CRDs.
 - `cert-manager` — cert-manager.
 - `external-secrets`, `external-secrets-certs` — external-secrets operator and its certificates.
-- `bitwarden-sdk-server` — Bitwarden Secrets Manager SDK server.
+- `bitwarden-sdk-server` — Bitwarden Secrets Manager SDK server. It reads its TLS certificate only
+  at startup, so it is annotated for Reloader to restart it whenever cert-manager renews
+  `bitwarden-tls-certs`.
+- `reloader` — Stakater Reloader; rolls workloads that opt in via `*.reloader.stakater.com/*`
+  annotations when a referenced Secret or ConfigMap changes.
 - `external-secrets-store` — `ClusterSecretStore` backed by Bitwarden.
 - `cert-manager-issuers` — `letsencrypt` ClusterIssuer (DNS-01 via Cloudflare).
 - `nginx-gateway-fabric` — Gateway API data plane (hostPort 80/443 on every node).
