@@ -130,6 +130,13 @@ flowchart TD
   implement PKCE); its secret and the session crypto key are stored manually in Bitwarden as
   `freshrss/oidc-client-secret` and `freshrss/oidc-crypto-key`. `freshrss-admin` is the default
   (admin) user; `martin.tome` is a normal user.
+- `rsshub` — internal-only, no hostname: nothing depends on it and it depends on nothing, so it has
+  no route and no edges in the graph. FreshRSS consumes feeds at
+  `http://rsshub.rsshub.svc.cluster.local/`. The `chromium-bundled` image variant (pinned by commit
+  hash, daily date tags are mutable) so browser-based routes work, with an `emptyDir` at `/dev/shm`
+  because the kubelet default of 64Mi makes Chromium crash. Stateless: route and content caches live
+  in a bundled Valkey 8 with persistence disabled on an `emptyDir`, and log files are off, so there
+  is no PVC and no secret.
 - `gotify` — `push.xtinto.com`; depends on `gateways`, `external-secrets-store`,
   `linstor-cluster`. Raw manifests, SQLite on a `replicated` PVC. Kanidm OIDC is available for
   members of the `gotify_users` group; local password login stays enabled for the `admin` account.

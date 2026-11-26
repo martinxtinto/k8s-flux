@@ -1,0 +1,107 @@
+---
+# RSSHub generates RSS/Atom feeds for sites that do not offer any. It is internal-only: no
+# HTTPRoute, so only other cluster workloads (FreshRSS) consume it, at
+# http://rsshub.rsshub.svc.cluster.local/. The `chromium-bundled` image variant ships Chromium and
+# Playwright so routes that need a real browser work; RSSHub launches it with `--no-sandbox` as
+# root, so the pod keeps its default user. Route and content caches live in `rsshub-valkey`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rsshub
+  namespace: rsshub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rsshub
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rsshub
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rsshub
+          # Pinned to a daily `chromium-bundled` build by commit hash; daily date tags are mutable.
+          image: ghcr.io/diygod/rsshub:chromium-bundled-256d4ff365ae2f2fae208d9fee0501e4d256777e
+          ports:
+            - name: http
+              containerPort: 1200
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: TZ
+              value: America/Argentina/Buenos_Aires
+            # Cached feeds survive restarts in Valkey; log files are off so the container stays
+            # stateless and needs no volume.
+            - name: CACHE_TYPE
+              value: redis
+            - name: REDIS_URL
+              value: redis://rsshub-valkey:6379/
+            - name: NO_LOGFILES
+              value: "true"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            # Chromium runs with `--no-sandbox`, which is also why the pod keeps its default user;
+            # every capability is still dropped.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              # Chromium needs headroom on top of the Node.js process.
+              memory: 2Gi
+          volumeMounts:
+            # Chromium uses /dev/shm heavily; the kubelet default of 64Mi makes it crash under
+            # load, so back it with larger memory-backed storage.
+            - name: shm
+              mountPath: /dev/shm
+            # Browser and Node.js scratch space.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rsshub
+  namespace: rsshub
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rsshub
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
